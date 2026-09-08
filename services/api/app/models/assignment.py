@@ -17,3 +17,4 @@ class Assignment(Base, TenantMixin):
     room_id = Column(UUID(as_uuid=True), ForeignKey("room.id"), nullable=False)
     slot_start = Column(Integer, nullable=False)
     slot_span = Column(Integer, nullable=False, server_default="1")
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("batch.id"), nullable=True)

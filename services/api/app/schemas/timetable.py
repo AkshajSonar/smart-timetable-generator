@@ -13,6 +13,7 @@ class AssignmentRead(BaseModel):
     room_id: UUID
     slot_start: int
     slot_span: int
+    batch_id: Optional[UUID] = None
 
     model_config = {"from_attributes": True}
 
@@ -26,7 +27,6 @@ class TimetableRead(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    cohort_id: UUID
     term_id: Optional[UUID] = None
 
 

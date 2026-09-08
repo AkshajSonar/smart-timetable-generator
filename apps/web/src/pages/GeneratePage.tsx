@@ -4,46 +4,39 @@
  */
 
 import { useState } from 'react';
-import { api, type TimetableVersion, type Cohort } from '../api/client';
+import { api, type TimetableVersion, type LoadVerificationReport } from '../api/client';
 import { TimetableGrid } from '../features/timetable-grid/TimetableGrid';
 
 type Status = 'idle' | 'loading-cohorts' | 'ready' | 'generating' | 'done' | 'error';
 
 export function GeneratePage() {
   const [tenantId, setTenantId] = useState('');
-  const [cohorts, setCohorts] = useState<Cohort[]>([]);
-  const [selectedCohort, setSelectedCohort] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [timetable, setTimetable] = useState<TimetableVersion | null>(null);
+  const [report, setReport] = useState<LoadVerificationReport | null>(null);
   const [violations, setViolations] = useState<{ h_code: string; message: string }[]>([]);
 
-  async function loadCohorts() {
-    if (!tenantId.trim()) return;
-    setStatus('loading-cohorts');
-    setError('');
-    try {
-      const res = await api.cohorts.list(tenantId.trim());
-      setCohorts(res.items);
-      setSelectedCohort(res.items[0]?.id ?? '');
-      setStatus('ready');
-    } catch (e: unknown) {
-      setError((e as Error).message);
-      setStatus('error');
-    }
-  }
-
   async function generate() {
-    if (!selectedCohort) return;
+    if (!tenantId.trim()) return;
     setStatus('generating');
     setError('');
     setTimetable(null);
     setViolations([]);
     try {
-      const genRes = await api.timetables.generate(tenantId.trim(), selectedCohort);
+      const genRes = await api.timetables.generate(tenantId.trim());
       setViolations(genRes.violations);
+      
       const tv = await api.timetables.get(tenantId.trim(), genRes.timetable_version_id);
       setTimetable(tv);
+      
+      try {
+        const rep = await api.reports.getVerification(tenantId.trim(), genRes.timetable_version_id);
+        setReport(rep);
+      } catch (e) {
+        console.warn("Could not load report", e);
+      }
+      
       setStatus('done');
     } catch (e: unknown) {
       setError((e as Error).message);
@@ -97,49 +90,10 @@ export function GeneratePage() {
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
               />
             </div>
-            <button
-              id="load-cohorts-btn"
-              onClick={loadCohorts}
-              disabled={busy || !tenantId.trim()}
-              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40"
-              style={{ background: 'var(--accent)', color: '#fff' }}
-            >
-              {status === 'loading-cohorts' ? 'Loading…' : 'Load Cohorts'}
-            </button>
-          </div>
-        </section>
-
-        {/* Step 2: Cohort + Generate */}
-        {cohorts.length > 0 && (
-          <section className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-              Step 2 — Generate
-            </h2>
-            <div className="flex gap-3 items-end">
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                  Cohort
-                </label>
-                <select
-                  id="cohort-select"
-                  value={selectedCohort}
-                  onChange={e => setSelectedCohort(e.target.value)}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm outline-none"
-                  style={{
-                    background: 'var(--bg-panel)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {cohorts.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
               <button
                 id="generate-btn"
                 onClick={generate}
-                disabled={busy || !selectedCohort}
+                disabled={busy || !tenantId.trim()}
                 className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
                 style={{ background: 'var(--accent)', color: '#fff' }}
               >
@@ -150,7 +104,6 @@ export function GeneratePage() {
               </button>
             </div>
           </section>
-        )}
 
         {/* Error */}
         {status === 'error' && (
@@ -167,6 +120,43 @@ export function GeneratePage() {
               <p key={i} className="text-xs opacity-80">[{v.h_code}] {v.message}</p>
             ))}
           </div>
+        )}
+
+        {/* Verification Report */}
+        {report && (
+          <section className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+              Load Verification Report
+            </h2>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-medium mb-2 text-emerald-400">Faculty Load</h3>
+                <ul className="space-y-1">
+                  {report.faculty_load.map(f => (
+                    <li key={f.id} className="text-xs flex justify-between" style={{ color: 'var(--text-primary)' }}>
+                      <span>{f.name}</span>
+                      <span className={f.difference !== 0 ? 'text-red-400' : 'text-emerald-400'}>
+                        {f.scheduled_hours}/{f.required_hours}h
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium mb-2 text-emerald-400">Cohort Load</h3>
+                <ul className="space-y-1">
+                  {report.cohort_load.map(c => (
+                    <li key={c.id} className="text-xs flex justify-between" style={{ color: 'var(--text-primary)' }}>
+                      <span>{c.name}</span>
+                      <span className={c.difference !== 0 ? 'text-red-400' : 'text-emerald-400'}>
+                        {c.scheduled_hours}/{c.required_hours}h
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Timetable */}

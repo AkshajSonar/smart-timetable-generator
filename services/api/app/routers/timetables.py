@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant_context import set_tenant_context
 from app.models.assignment import Assignment
+from app.models.batch import Batch
 from app.models.cohort import Cohort
 from app.models.course import Course
 from app.models.eligibility import Eligibility
@@ -35,22 +36,26 @@ async def generate_timetable(
     """Phase 1: synchronous single-cohort generation."""
     from solver.data_types import (
         SolverInput, FacultyData, CourseData, CohortData,
-        RoomData, EligibilityData, PeriodSlot, BlockedSlot,
+        BatchData, RoomData, EligibilityData, PeriodSlot, BlockedSlot,
     )
     from solver.model import solve
     from solver.conflict_checker import check_all
 
-    # Load master data
-    cohort_result = await db.execute(select(Cohort).where(Cohort.id == body.cohort_id))
-    cohort = cohort_result.scalar_one_or_none()
-    if not cohort:
-        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Cohort not found"}})
+    # Load all master data for the tenant
+    cohort_result = await db.execute(select(Cohort))
+    cohorts = list(cohort_result.scalars().all())
+    if not cohorts:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "No cohorts found for tenant"}})
 
-    # Eligibility for this cohort
-    elig_result = await db.execute(select(Eligibility).where(Eligibility.cohort_id == body.cohort_id))
+    # Batches
+    batch_result = await db.execute(select(Batch))
+    batches = list(batch_result.scalars().all())
+
+    # Eligibility for all cohorts/batches
+    elig_result = await db.execute(select(Eligibility))
     eligibilities = list(elig_result.scalars().all())
     if not eligibilities:
-        raise HTTPException(status_code=400, detail={"error": {"code": "VALIDATION_ERROR", "message": "No eligibility records for this cohort"}})
+        raise HTTPException(status_code=400, detail={"error": {"code": "VALIDATION_ERROR", "message": "No eligibility records found"}})
 
     # Courses involved
     course_ids = list(set(e.course_id for e in eligibilities))
@@ -97,7 +102,14 @@ async def generate_timetable(
             required_equipment_tags=c.required_equipment_tags or [],
         ))
 
-    solver_cohorts = [CohortData(id=str(cohort.id), name=cohort.name)]
+    solver_cohorts = [CohortData(id=str(c.id), name=c.name) for c in cohorts]
+    
+    solver_batches = [BatchData(
+        id=str(b.id),
+        label=b.label,
+        cohort_id=str(b.cohort_id),
+        course_id=str(b.course_id),
+    ) for b in batches]
 
     solver_rooms = []
     for rid, r in rooms.items():
@@ -113,7 +125,7 @@ async def generate_timetable(
         solver_elig.append(EligibilityData(
             faculty_id=str(e.staff_profile_id),
             course_id=str(e.course_id),
-            cohort_id=str(e.cohort_id),
+            cohort_id=str(e.batch_id) if e.batch_id else str(e.cohort_id),
         ))
 
     # Build period slots: each (weekday, period_index) → a unique integer slot
@@ -139,16 +151,22 @@ async def generate_timetable(
                 slot_index=slot_map[key],
             ))
 
+    room_type_counts = {}
+    for r in rooms.values():
+        room_type_counts[r.type] = room_type_counts.get(r.type, 0) + 1
+
     solver_input = SolverInput(
         faculty=solver_faculty,
         courses=solver_courses,
         cohorts=solver_cohorts,
+        batches=solver_batches,
         rooms=solver_rooms,
         eligibility=solver_elig,
         period_slots=period_slots,
         blocked_slots=solver_blocked,
         slots_per_day=slots_by_day,
         num_slots=slot_index,
+        room_type_counts=room_type_counts,
     )
 
     # Solve
@@ -176,6 +194,7 @@ async def generate_timetable(
             room_id=UUID(a.room_id),
             slot_start=a.slot_index,
             slot_span=a.slot_span,
+            batch_id=UUID(a.batch_id) if a.batch_id else None,
         )
         db.add(assignment)
 

@@ -37,7 +37,7 @@ def make_simple_input(
     periods_per_day: int = 6,
     blocked_slots: list[BlockedSlot] | None = None,
 ) -> SolverInput:
-    """Build a minimal SolverInput for testing."""
+    """Build a minimal SolverInput for testing (no batches — Phase 1 mode)."""
     faculty = [
         FacultyData(id=f"f{i}", workload_cap_week=workload_cap_week, workload_cap_day=workload_cap_day)
         for i in range(num_faculty)
@@ -58,14 +58,22 @@ def make_simple_input(
     ]
     period_slots, slots_per_day, num_slots = make_period_slots(days, periods_per_day)
 
+    # Compute room_type_counts for H10
+    room_type_counts: dict[str, int] = {}
+    for r in rooms:
+        room_type_counts[r.type] = room_type_counts.get(r.type, 0) + 1
+
     return SolverInput(
         faculty=faculty,
         courses=courses,
         cohorts=cohorts,
+        batches=[],  # no batches in Phase 1 mode
         rooms=rooms,
         eligibility=eligibility,
         period_slots=period_slots,
         blocked_slots=blocked_slots or [],
         slots_per_day=slots_per_day,
         num_slots=num_slots,
+        room_type_counts=room_type_counts,
     )
+

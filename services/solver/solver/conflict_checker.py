@@ -39,18 +39,49 @@ def check_h1_no_faculty_double_booking(
 def check_h2_no_cohort_double_booking(
     assignments: list[AssignmentResult],
 ) -> list[Violation]:
-    """H2: No cohort in two courses at the same slot."""
+    """H2: No cohort/batch double-booked across two courses in the same slot."""
     violations = []
-    by_cohort_slot: dict[tuple[str, int], list[AssignmentResult]] = defaultdict(list)
+    
+    # Track whole-cohort vs batch assignments separately per cohort per slot
+    whole_cohort_by_slot: dict[tuple[str, int], list[AssignmentResult]] = defaultdict(list)
+    batch_by_slot: dict[tuple[str, str, int], list[AssignmentResult]] = defaultdict(list)
+
     for a in assignments:
         for offset in range(a.slot_span):
-            by_cohort_slot[(a.cohort_id, a.slot_index + offset)].append(a)
-    for (k, s), group in by_cohort_slot.items():
-        if len(group) > 1:
-            violations.append(Violation(
-                h_code="H2",
-                message=f"Cohort {k} double-booked at slot {s}: {len(group)} assignments",
-            ))
+            s = a.slot_index + offset
+            if a.batch_id is None:
+                whole_cohort_by_slot[(a.cohort_id, s)].append(a)
+            else:
+                batch_by_slot[(a.cohort_id, a.batch_id, s)].append(a)
+
+    cohorts = set(k for k, _ in whole_cohort_by_slot.keys()) | set(k for k, _, _ in batch_by_slot.keys())
+
+    for k in cohorts:
+        # All slots this cohort has assignments in
+        slots = set(s for kv, s in whole_cohort_by_slot.keys() if kv == k) | set(s for kv, _, s in batch_by_slot.keys() if kv == k)
+        
+        for s in slots:
+            whole = whole_cohort_by_slot[(k, s)]
+            # Check whole cohort double booking
+            if len(whole) > 1:
+                violations.append(Violation(
+                    h_code="H2",
+                    message=f"Cohort {k} double-booked at slot {s}: {len(whole)} whole-cohort assignments",
+                ))
+                continue
+                
+            # Find all batches for this cohort at this slot
+            batches_at_slot = set(b for kv, b, sv in batch_by_slot.keys() if kv == k and sv == s)
+            
+            for b in batches_at_slot:
+                batch_assigns = batch_by_slot[(k, b, s)]
+                total = len(whole) + len(batch_assigns)
+                if total > 1:
+                    violations.append(Violation(
+                        h_code="H2",
+                        message=f"Cohort {k} batch {b} double-booked at slot {s}: {len(whole)} whole + {len(batch_assigns)} batch assignments",
+                    ))
+
     return violations
 
 
@@ -116,23 +147,39 @@ def check_h6_hours_match_required(
     assignments: list[AssignmentResult],
     inp: SolverInput,
 ) -> list[Violation]:
-    """H6: Scheduled hours per (course, cohort) == required hours."""
+    """H6: Scheduled hours per eligible (course, cohort/batch) == required hours."""
     violations = []
     courses_by_id = {c.id: c for c in inp.courses}
+    batches_by_id = {b.id: b for b in inp.batches}
 
-    hours: dict[tuple[str, str], int] = defaultdict(int)
+    # Find valid scheduling units from eligibility
+    scheduling_units = set()
+    for e in inp.eligibility:
+        if e.cohort_id in batches_by_id:
+            batch = batches_by_id[e.cohort_id]
+            scheduling_units.add((e.course_id, batch.cohort_id, batch.id))
+        else:
+            scheduling_units.add((e.course_id, e.cohort_id, None))
+
+    # Calculate actual hours
+    hours: dict[tuple[str, str, str | None], int] = defaultdict(int)
     for a in assignments:
-        hours[(a.course_id, a.cohort_id)] += a.slot_span
+        hours[(a.course_id, a.cohort_id, a.batch_id)] += a.slot_span
 
-    for cohort in inp.cohorts:
-        for course in inp.courses:
-            required = course.hours_per_week
-            actual = hours.get((course.id, cohort.id), 0)
-            if actual != required:
-                violations.append(Violation(
-                    h_code="H6",
-                    message=f"Course {course.id} / cohort {cohort.id}: scheduled {actual}h, required {required}h",
-                ))
+    for (course_id, cohort_id, batch_id) in scheduling_units:
+        course = courses_by_id.get(course_id)
+        if not course:
+            continue
+            
+        required = course.hours_per_week
+        actual = hours.get((course_id, cohort_id, batch_id), 0)
+        if actual != required:
+            target = f"batch {batch_id}" if batch_id else f"cohort {cohort_id}"
+            violations.append(Violation(
+                h_code="H6",
+                message=f"Course {course_id} / {target}: scheduled {actual}h, required {required}h",
+            ))
+            
     return violations
 
 
@@ -222,11 +269,44 @@ def check_h9_room_type_match(
     return violations
 
 
+def check_h10_shared_lab_capacity(
+    assignments: list[AssignmentResult],
+    inp: SolverInput,
+) -> list[Violation]:
+    """H10: For lab type L, slot s: Σ assign using a room of type L at s ≤ count(rooms of type L)."""
+    violations = []
+    room_types = set(r.type for r in inp.rooms)
+    rooms_by_type = {t: set() for t in room_types}
+    for r in inp.rooms:
+        rooms_by_type[r.type].add(r.id)
+
+    # Track usage per room type per slot
+    usage_by_type_slot: dict[tuple[str, int], int] = defaultdict(int)
+    rooms_by_id = {r.id: r for r in inp.rooms}
+
+    for a in assignments:
+        r = rooms_by_id.get(a.room_id)
+        if r:
+            for offset in range(a.slot_span):
+                usage_by_type_slot[(r.type, a.slot_index + offset)] += 1
+
+    for room_type in room_types:
+        capacity = inp.room_type_counts.get(room_type, len(rooms_by_type[room_type]))
+        for s in range(inp.num_slots):
+            actual = usage_by_type_slot.get((room_type, s), 0)
+            if actual > capacity:
+                violations.append(Violation(
+                    h_code="H10",
+                    message=f"Room type {room_type} capacity exceeded at slot {s}: used {actual}, capacity {capacity}",
+                ))
+    return violations
+
+
 def check_all(
     assignments: list[AssignmentResult],
     inp: SolverInput,
 ) -> list[Violation]:
-    """Run all H1–H9 checks and return combined violations."""
+    """Run all H1–H10 checks and return combined violations."""
     violations = []
     violations.extend(check_h1_no_faculty_double_booking(assignments))
     violations.extend(check_h2_no_cohort_double_booking(assignments))
@@ -237,4 +317,5 @@ def check_all(
     violations.extend(check_h7_valid_period_range(assignments, inp))
     violations.extend(check_h8_workload_cap(assignments, inp))
     violations.extend(check_h9_room_type_match(assignments, inp))
+    violations.extend(check_h10_shared_lab_capacity(assignments, inp))
     return violations
