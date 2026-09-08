@@ -1,14 +1,34 @@
-import { StudentViewPage } from './features/faculty-student-view/StudentViewPage'
-import './App.css'
+import { useState } from 'react';
+import { GeneratePage } from './pages/GeneratePage';
+import { StudentViewPage } from './features/faculty-student-view/StudentViewPage';
+import './App.css';
 
 function App() {
+  const [currentTab, setCurrentTab] = useState<'generate' | 'students'>('generate');
+
   return (
-    <div className="min-h-screen bg-slate-950 p-8">
-      <div className="max-w-6xl mx-auto">
-        <StudentViewPage />
+    <div className="min-h-screen bg-slate-950 p-8 flex flex-col gap-6">
+      <nav className="max-w-6xl mx-auto w-full flex gap-4 border-b border-white/10 pb-4">
+        <button
+          onClick={() => setCurrentTab('generate')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'generate' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+        >
+          Generate / Reports
+        </button>
+        <button
+          onClick={() => setCurrentTab('students')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'students' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+        >
+          Student View
+        </button>
+      </nav>
+
+      <div className="max-w-6xl mx-auto w-full">
+        {currentTab === 'generate' && <GeneratePage />}
+        {currentTab === 'students' && <StudentViewPage />}
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

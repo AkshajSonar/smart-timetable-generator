@@ -27,45 +27,35 @@ async def import_enrollment(
     stud_result = await db.execute(select(StudentProfile))
     students_by_code = {s.external_student_code: s for s in stud_result.scalars().all()}
 
-    # Fetch courses and map by name
-    course_result = await db.execute(select(Course).where(Course.type == "elective"))
-    courses_by_name = {c.name: c for c in course_result.scalars().all()}
-
-    # Pre-fetch elective sections for the involved courses and terms
-    # (course_id, term_id) -> ElectiveSection
-    es_result = await db.execute(select(ElectiveSection))
-    es_by_course_term = {(es.course_id, es.term_id): es for es in es_result.scalars().all()}
+    # Fetch elective sections and map by external_id
+    es_result = await db.execute(select(ElectiveSection).where(ElectiveSection.external_id.is_not(None)))
+    es_by_external_id = {es.external_id: es for es in es_result.scalars().all()}
 
     # Pre-fetch existing enrollments to avoid duplicates
     enr_result = await db.execute(select(EnrollmentRecord))
     existing_enr = {(e.student_profile_id, e.elective_section_id) for e in enr_result.scalars().all()}
 
     for row in body.rows:
-        row_id = f"{row.student_code} - {row.course_name}"
-        student = students_by_code.get(row.student_code)
+        row_id = f"{row.student_external_id} - {row.elective_section_external_id}"
+        
+        student = students_by_code.get(row.student_external_id)
         if not student:
-            errors.append({"row": row_id, "error": f"Student with code {row.student_code} not found"})
+            errors.append({"row": row_id, "error": f"Student with external_id {row.student_external_id} not found"})
             continue
 
-        course = courses_by_name.get(row.course_name)
-        if not course:
-            errors.append({"row": row_id, "error": f"Elective course with name {row.course_name} not found"})
-            continue
-
-        es = es_by_course_term.get((course.id, row.term_id))
+        es = es_by_external_id.get(row.elective_section_external_id)
         if not es:
-            errors.append({"row": row_id, "error": f"No elective section found for course {row.course_name} in term {row.term_id}"})
+            errors.append({"row": row_id, "error": f"Elective section with external_id {row.elective_section_external_id} not found"})
             continue
 
         if (student.id, es.id) in existing_enr:
-            # Already enrolled, just skip or count as success
+            # Already enrolled
             continue
 
         # Check capacity
-        # For simplicity, not doing strict capacity block here unless requested, but let's do a basic check
         current_enrollments = sum(1 for e in existing_enr if e[1] == es.id)
         if current_enrollments >= es.capacity:
-            errors.append({"row": row_id, "error": f"Elective section for {row.course_name} is at capacity ({es.capacity})"})
+            errors.append({"row": row_id, "error": f"Elective section {row.elective_section_external_id} is at capacity ({es.capacity})"})
             continue
 
         # Add new enrollment
