@@ -183,11 +183,40 @@ def build_h10_shared_lab_capacity(
                 model.Add(sum(vars_for_type) <= capacity)
 
 
+def build_h11_no_student_double_booking(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+):
+    """H11: An individual student's timetable has no double-booking across their course combination.
+    Uses explicit batch membership logic: if a student is in Batch A for a course, they are only
+    constrained against Batch A's assignments for that course, not Batch B's.
+    """
+    for student in inp.students:
+        for s in range(inp.num_slots):
+            # Gather all variables for this student's courses at this slot
+            student_vars_at_slot = []
+            for sc in student.courses:
+                # If they are in a specific batch for this course, match only that batch.
+                # If they are not in a batch (whole cohort course), match where b is None.
+                # Wait, what if the input just says batch_id is None, meaning it's a whole-cohort course?
+                # Then we match b == None. But what if there are no batches for that course at all?
+                # The decision variable has b=None. So matching sc.batch_id works.
+                vars_for_course = [
+                    v for (fv, c, k, b, r, sv), v in assign.items()
+                    if c == sc.course_id and k == sc.cohort_id and b == sc.batch_id and sv == s
+                ]
+                student_vars_at_slot.extend(vars_for_course)
+            
+            if student_vars_at_slot:
+                model.Add(sum(student_vars_at_slot) <= 1)
+
+
 # ---------- Main solve function ----------
 
 
 def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult] | None:
-    """Build the CP-SAT model, apply H1–H9, and solve.
+    """Build the CP-SAT model, apply H1–H11, and solve.
 
     Returns a list of AssignmentResult on success, or None if infeasible.
     """
@@ -246,6 +275,7 @@ def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult]
     build_h8_workload_cap(model, assign, inp)
     build_h9_room_type_match()  # by construction
     build_h10_shared_lab_capacity(model, assign, inp)
+    build_h11_no_student_double_booking(model, assign, inp)
 
     # Solve
     solver = cp_model.CpSolver()

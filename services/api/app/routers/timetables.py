@@ -155,6 +155,81 @@ async def generate_timetable(
     for r in rooms.values():
         room_type_counts[r.type] = room_type_counts.get(r.type, 0) + 1
 
+    # Load Phase 3 Student Data
+    from app.models.student_profile import StudentProfile
+    from app.models.batch_membership import BatchMembership
+    from app.models.enrollment_record import EnrollmentRecord
+    from app.models.elective_section import ElectiveSection
+    from solver.data_types import StudentData, StudentCourseData
+
+    stud_result = await db.execute(select(StudentProfile))
+    db_students = list(stud_result.scalars().all())
+
+    bm_result = await db.execute(select(BatchMembership))
+    db_batch_memberships = list(bm_result.scalars().all())
+
+    enr_result = await db.execute(select(EnrollmentRecord))
+    db_enrollments = list(enr_result.scalars().all())
+
+    es_result = await db.execute(select(ElectiveSection))
+    db_elective_sections = {es.id: es for es in es_result.scalars().all()}
+
+    # Map student -> batches
+    student_batches: dict[UUID, list[UUID]] = {}
+    for bm in db_batch_memberships:
+        student_batches.setdefault(bm.student_profile_id, []).append(bm.batch_id)
+
+    # Map student -> elective courses
+    student_electives: dict[UUID, list[UUID]] = {}
+    for enr in db_enrollments:
+        es = db_elective_sections.get(enr.elective_section_id)
+        if es:
+            student_electives.setdefault(enr.student_profile_id, []).append(es.course_id)
+
+    # Build solver_students
+    solver_students = []
+    # Create a quick lookup for batch_id -> course_id to know which course the batch belongs to
+    batch_to_course = {b.id: b.course_id for b in batches}
+    
+    for s in db_students:
+        s_courses = []
+        
+        # 1. Core courses for this student's cohort
+        # Any eligibility for this cohort that is NOT batch-level and NOT an elective the student ISN'T in
+        # Actually, it's easier: check all eligibilities for this student's cohort.
+        for e in eligibilities:
+            # We only care about courses for this student's cohort
+            # Wait, `e.cohort_id` could be the parent cohort.
+            if e.cohort_id != s.cohort_id:
+                continue
+
+            course = courses.get(e.course_id)
+            if not course:
+                continue
+
+            # If it's a batch-split course (there are batches for it in this cohort)
+            # The student is only enrolled if they have a batch membership for it
+            batches_for_course = [b for b in batches if b.course_id == e.course_id and b.cohort_id == s.cohort_id]
+            
+            if batches_for_course:
+                # Student must be in one of these batches to take the course
+                student_bms = student_batches.get(s.id, [])
+                for b in batches_for_course:
+                    if b.id in student_bms:
+                        s_courses.append(StudentCourseData(course_id=str(course.id), cohort_id=str(s.cohort_id), batch_id=str(b.id)))
+                        break
+            else:
+                # It's a whole-cohort course
+                if course.type == "elective":
+                    # Check if student is enrolled
+                    if course.id in student_electives.get(s.id, []):
+                        s_courses.append(StudentCourseData(course_id=str(course.id), cohort_id=str(s.cohort_id), batch_id=None))
+                else:
+                    # Core course
+                    s_courses.append(StudentCourseData(course_id=str(course.id), cohort_id=str(s.cohort_id), batch_id=None))
+
+        solver_students.append(StudentData(id=str(s.id), courses=s_courses))
+
     solver_input = SolverInput(
         faculty=solver_faculty,
         courses=solver_courses,
@@ -167,6 +242,7 @@ async def generate_timetable(
         slots_per_day=slots_by_day,
         num_slots=slot_index,
         room_type_counts=room_type_counts,
+        students=solver_students,
     )
 
     # Solve

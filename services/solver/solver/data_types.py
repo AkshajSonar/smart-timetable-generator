@@ -83,6 +83,17 @@ class BlockedSlot:
 
 
 @dataclass
+class StudentCourseData:
+    course_id: str
+    cohort_id: str
+    batch_id: str | None = None
+
+@dataclass
+class StudentData:
+    id: str
+    courses: list[StudentCourseData]
+
+@dataclass
 class SolverInput:
     faculty: list[FacultyData]
     courses: list[CourseData]
@@ -96,6 +107,7 @@ class SolverInput:
     # H10: count of rooms per type for shared-capacity check
     room_type_counts: dict[str, int] = field(default_factory=dict)  # room_type → count
     batches: list[BatchData] = field(default_factory=list)    # Phase 2: batch scheduling units (empty list = Phase 1 mode)
+    students: list[StudentData] = field(default_factory=list) # Phase 3: students and their enrolled courses/batches
 
 
 @dataclass

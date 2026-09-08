@@ -6,27 +6,6 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.models.base import Base, TenantMixin, new_uuid
 
 
-class StudentProfile(Base, TenantMixin):
-    __tablename__ = "student_profile"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
-    identity_id = Column(UUID(as_uuid=True), ForeignKey("identity.id"), nullable=True)
-    external_student_code = Column(String, nullable=True)
-    cohort_id = Column(UUID(as_uuid=True), ForeignKey("cohort.id"), nullable=True)
-
-
-class ElectiveSection(Base, TenantMixin):
-    __tablename__ = "elective_section"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
-    course_id = Column(UUID(as_uuid=True), ForeignKey("course.id"), nullable=False)
-    term_id = Column(UUID(as_uuid=True), ForeignKey("academic_term.id"), nullable=True)
-    capacity = Column(Integer, nullable=True)
-
-
-class EnrollmentRecord(Base, TenantMixin):
-    __tablename__ = "enrollment_record"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
-    student_profile_id = Column(UUID(as_uuid=True), ForeignKey("student_profile.id"), nullable=False)
-    elective_section_id = Column(UUID(as_uuid=True), ForeignKey("elective_section.id"), nullable=False)
 
 
 class ExceptionCalendar(Base, TenantMixin):

@@ -17,10 +17,11 @@ from app.models.period_template import PeriodTemplate  # noqa: F401
 from app.models.constraint_rule import ConstraintRule  # noqa: F401
 from app.models.timetable_version import TimetableVersion  # noqa: F401
 from app.models.assignment import Assignment  # noqa: F401
+from app.models.student_profile import StudentProfile  # noqa: F401
+from app.models.elective_section import ElectiveSection  # noqa: F401
+from app.models.enrollment_record import EnrollmentRecord  # noqa: F401
+from app.models.batch_membership import BatchMembership  # noqa: F401
 from app.models.stubs import (  # noqa: F401
-    StudentProfile,
-    ElectiveSection,
-    EnrollmentRecord,
     ExceptionCalendar,
     ExamTimetableVersion,
     ExamSession,

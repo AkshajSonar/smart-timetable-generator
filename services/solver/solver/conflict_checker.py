@@ -135,10 +135,11 @@ def check_h5_faculty_eligibility(
         eligible.add((e.faculty_id, e.course_id, e.cohort_id))
 
     for a in assignments:
-        if (a.faculty_id, a.course_id, a.cohort_id) not in eligible:
+        target_id = a.batch_id if a.batch_id else a.cohort_id
+        if (a.faculty_id, a.course_id, target_id) not in eligible:
             violations.append(Violation(
                 h_code="H5",
-                message=f"Faculty {a.faculty_id} not eligible for course {a.course_id} / cohort {a.cohort_id}",
+                message=f"Faculty {a.faculty_id} not eligible for course {a.course_id} / cohort/batch {target_id}",
             ))
     return violations
 
@@ -302,11 +303,47 @@ def check_h10_shared_lab_capacity(
     return violations
 
 
+def check_h11_no_student_double_booking(
+    assignments: list[AssignmentResult],
+    inp: SolverInput,
+) -> list[Violation]:
+    """H11: An individual student's timetable has no double-booking across their course combination."""
+    violations = []
+
+    # Pre-index assignments by course + cohort + batch (or None)
+    assign_by_course: dict[tuple[str, str, str | None], list[AssignmentResult]] = defaultdict(list)
+    for a in assignments:
+        assign_by_course[(a.course_id, a.cohort_id, a.batch_id)].append(a)
+
+    for student in inp.students:
+        # Get all assignments for this student's courses
+        student_assigns = []
+        for sc in student.courses:
+            student_assigns.extend(assign_by_course.get((sc.course_id, sc.cohort_id, sc.batch_id), []))
+
+        # Check for overlaps
+        by_slot: dict[int, list[AssignmentResult]] = defaultdict(list)
+        for a in student_assigns:
+            for offset in range(a.slot_span):
+                by_slot[a.slot_index + offset].append(a)
+
+        for slot, group in by_slot.items():
+            if len(group) > 1:
+                # To prevent spamming, we could collect unique overlaps
+                courses_overlapping = [f"{a.course_id}({a.batch_id or 'all'})" for a in group]
+                violations.append(Violation(
+                    h_code="H11",
+                    message=f"Student {student.id} double-booked at slot {slot}: {', '.join(courses_overlapping)}",
+                ))
+    
+    return violations
+
+
 def check_all(
     assignments: list[AssignmentResult],
     inp: SolverInput,
 ) -> list[Violation]:
-    """Run all H1–H10 checks and return combined violations."""
+    """Run all H1–H11 checks and return combined violations."""
     violations = []
     violations.extend(check_h1_no_faculty_double_booking(assignments))
     violations.extend(check_h2_no_cohort_double_booking(assignments))
@@ -318,4 +355,5 @@ def check_all(
     violations.extend(check_h8_workload_cap(assignments, inp))
     violations.extend(check_h9_room_type_match(assignments, inp))
     violations.extend(check_h10_shared_lab_capacity(assignments, inp))
+    violations.extend(check_h11_no_student_double_booking(assignments, inp))
     return violations
