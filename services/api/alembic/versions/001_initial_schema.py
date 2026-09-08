@@ -14,9 +14,8 @@ branch_labels = None
 depends_on = None
 
 # Every tenant-scoped table gets this RLS policy in the same migration (invariant #3).
-# Every tenant-scoped table gets this RLS policy in the same migration (invariant #3).
-# Excludes: identity (tenant-independent), staff_availability_block and exam_session
-# (scoped via FK, no direct tenant_id), and tenant itself (would lock out all queries).
+# Excludes: identity (tenant-independent), staff_availability_block (tenant_id added in
+# migration 002 — §32 #19), exam_session (scoped via FK), and tenant itself (self-ref).
 TENANT_SCOPED_TABLES = [
     "academic_term",
     "campus",
