@@ -16,27 +16,6 @@ class ExceptionCalendar(Base, TenantMixin):
     description = Column(String, nullable=True)
 
 
-class ExamTimetableVersion(Base, TenantMixin):
-    __tablename__ = "exam_timetable_version"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
-    term_id = Column(UUID(as_uuid=True), ForeignKey("academic_term.id"), nullable=True)
-    state = Column(String, nullable=False, server_default="draft")
-    created_by = Column(UUID(as_uuid=True), ForeignKey("identity.id"), nullable=True)
-    approved_by = Column(UUID(as_uuid=True), ForeignKey("identity.id"), nullable=True)
-    version_no = Column(Integer, nullable=False, server_default="1")
-
-
-class ExamSession(Base):
-    __tablename__ = "exam_session"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
-    exam_timetable_version_id = Column(UUID(as_uuid=True), ForeignKey("exam_timetable_version.id"), nullable=False)
-    course_id = Column(UUID(as_uuid=True), ForeignKey("course.id"), nullable=False)
-    cohort_id = Column(UUID(as_uuid=True), ForeignKey("cohort.id"), nullable=False)
-    room_id = Column(UUID(as_uuid=True), ForeignKey("room.id"), nullable=False)
-    invigilator_staff_profile_id = Column(UUID(as_uuid=True), ForeignKey("staff_profile.id"), nullable=True)
-    slot_start = Column(Integer, nullable=False)
-
-
 class SubstitutionLog(Base, TenantMixin):
     __tablename__ = "substitution_log"
     id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)

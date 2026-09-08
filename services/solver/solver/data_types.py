@@ -94,6 +94,23 @@ class StudentData:
     courses: list[StudentCourseData]
 
 @dataclass
+class ExamSessionData:
+    """Pre-processed exam session requirement (room and students are fixed)."""
+    id: str
+    course_id: str
+    cohort_id: str
+    room_id: str
+    num_students: int  # H13 needs this to enforce room capacity if multiple sessions share a room
+
+
+@dataclass
+class StudentExamData:
+    """Pre-processed student assignment to specific exam sessions."""
+    id: str
+    exam_session_ids: list[str]
+
+
+@dataclass
 class SolverInput:
     faculty: list[FacultyData]
     courses: list[CourseData]
@@ -108,6 +125,9 @@ class SolverInput:
     room_type_counts: dict[str, int] = field(default_factory=dict)  # room_type → count
     batches: list[BatchData] = field(default_factory=list)    # Phase 2: batch scheduling units (empty list = Phase 1 mode)
     students: list[StudentData] = field(default_factory=list) # Phase 3: students and their enrolled courses/batches
+    is_exam: bool = False  # Phase 4: flag indicating if this is an exam generation run
+    exam_sessions: list[ExamSessionData] = field(default_factory=list) # Phase 4: fixed exam sessions
+    students_exams: list[StudentExamData] = field(default_factory=list) # Phase 4: student assignments to exam sessions
 
 
 @dataclass
@@ -120,4 +140,13 @@ class AssignmentResult:
     slot_index: int
     slot_span: int = 1
     batch_id: str | None = None  # non-None when this assignment is for a specific batch
+
+
+@dataclass
+class ExamSessionResult:
+    """A single exam session assignment in the solver's output."""
+    id: str
+    room_id: str
+    invigilator_staff_profile_id: str | None
+    slot_index: int
 

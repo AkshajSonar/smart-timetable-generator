@@ -765,6 +765,8 @@ Named explicitly so these are never mistaken for gaps in the spec — they are o
 
 - Specific frontend component/icon library choices beyond React + Tailwind (Section 13).
 
+- Exam Module Scope: Exams apply only to `type='core'` and `type='elective'` courses. `type='lab'` courses are excluded from exam scheduling (labs are batch-split/practical and don't fit the seated room+invigilator model).
+
 32\. IDE Build-Readiness Review Log
 
 | **\#** | **Gap found in this pass**                                                                                        | **Closed by**                                       |

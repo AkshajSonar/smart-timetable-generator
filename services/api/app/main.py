@@ -16,6 +16,7 @@ from app.routers import (
     reports,
     import_data,
     students,
+    exams,
 )
 
 app = FastAPI(
@@ -44,6 +45,7 @@ app.include_router(timetables.router)
 app.include_router(reports.router)
 app.include_router(import_data.router)
 app.include_router(students.router)
+app.include_router(exams.router)
 
 
 @app.get("/health")

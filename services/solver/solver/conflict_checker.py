@@ -8,7 +8,7 @@ model.py. It re-derives violations by iterating assignments directly.
 from collections import defaultdict
 from dataclasses import dataclass
 
-from solver.data_types import AssignmentResult, SolverInput
+from solver.data_types import AssignmentResult, ExamSessionResult, SolverInput
 from solver.model import _room_matches_course
 
 
@@ -356,4 +356,136 @@ def check_all(
     violations.extend(check_h9_room_type_match(assignments, inp))
     violations.extend(check_h10_shared_lab_capacity(assignments, inp))
     violations.extend(check_h11_no_student_double_booking(assignments, inp))
+    return violations
+
+
+def check_h12_student_exam_overlap(
+    assignments: list['ExamSessionResult'],
+    inp: SolverInput,
+) -> list[Violation]:
+    """H12: No student has two overlapping exam sessions."""
+    violations = []
+    
+    # Map exam_session_id -> slot_index
+    session_slots = {a.id: a.slot_index for a in assignments}
+    
+    for student in inp.students_exams:
+        slots_seen = set()
+        for e in student.exam_session_ids:
+            s = session_slots.get(e)
+            if s is not None:
+                if s in slots_seen:
+                    violations.append(Violation(
+                        h_code="H12",
+                        message=f"Student {student.id} has overlapping exams at slot {s}",
+                    ))
+                slots_seen.add(s)
+                
+    return violations
+
+
+def check_h13_exam_room_capacity(
+    assignments: list['ExamSessionResult'],
+    inp: SolverInput,
+) -> list[Violation]:
+    """H13: Exam-room seating capacity is never exceeded at any slot."""
+    violations = []
+    rooms_by_id = {r.id: r for r in inp.rooms}
+    sessions_by_id = {s.id: s for s in inp.exam_sessions}
+    
+    usage_by_room_slot: dict[tuple[str, int], int] = defaultdict(int)
+    for a in assignments:
+        sess = sessions_by_id.get(a.id)
+        if sess:
+            usage_by_room_slot[(a.room_id, a.slot_index)] += sess.num_students
+            
+    for (r_id, s), used in usage_by_room_slot.items():
+        room = rooms_by_id.get(r_id)
+        if room and used > room.capacity:
+            violations.append(Violation(
+                h_code="H13",
+                message=f"Room {r_id} capacity exceeded at slot {s}: used {used}, capacity {room.capacity}",
+            ))
+            
+    return violations
+
+
+def check_h14_invigilator_double_booking(
+    assignments: list['ExamSessionResult'],
+    inp: SolverInput,
+) -> list[Violation]:
+    """H14: Invigilators are not double-booked and respect workload/availability."""
+    violations = []
+    
+    # 1. Double booking
+    by_faculty_slot: dict[tuple[str, int], int] = defaultdict(int)
+    for a in assignments:
+        if a.invigilator_staff_profile_id:
+            by_faculty_slot[(a.invigilator_staff_profile_id, a.slot_index)] += 1
+            
+    for (f, s), count in by_faculty_slot.items():
+        if count > 1:
+            violations.append(Violation(
+                h_code="H14",
+                message=f"Invigilator {f} double-booked at slot {s}: {count} assignments",
+            ))
+
+    # 2. Unavailable blocks
+    blocked_set: dict[str, set[int]] = defaultdict(set)
+    for b in inp.blocked_slots:
+        blocked_set[b.faculty_id].add(b.slot_index)
+        
+    for a in assignments:
+        if a.invigilator_staff_profile_id and a.slot_index in blocked_set.get(a.invigilator_staff_profile_id, set()):
+            violations.append(Violation(
+                h_code="H14",
+                message=f"Invigilator {a.invigilator_staff_profile_id} scheduled at blocked slot {a.slot_index}",
+            ))
+
+    # 3. Workload caps
+    faculty_by_id = {f.id: f for f in inp.faculty}
+    weekly_load: dict[str, int] = defaultdict(int)
+    slot_to_day: dict[int, int] = {}
+    for ps in inp.period_slots:
+        slot_to_day[ps.slot_index] = ps.weekday
+    daily_load: dict[tuple[str, int], int] = defaultdict(int)
+    
+    for a in assignments:
+        if a.invigilator_staff_profile_id:
+            f = a.invigilator_staff_profile_id
+            weekly_load[f] += 1
+            day = slot_to_day.get(a.slot_index)
+            if day is not None:
+                daily_load[(f, day)] += 1
+                
+    for fid, load in weekly_load.items():
+        if fid in faculty_by_id:
+            cap = faculty_by_id[fid].workload_cap_week
+            if load > cap:
+                violations.append(Violation(
+                    h_code="H14",
+                    message=f"Invigilator {fid} weekly load {load} exceeds cap {cap}",
+                ))
+                
+    for (fid, day), load in daily_load.items():
+        if fid in faculty_by_id:
+            cap = faculty_by_id[fid].workload_cap_day
+            if load > cap:
+                violations.append(Violation(
+                    h_code="H14",
+                    message=f"Invigilator {fid} daily load on day {day}: {load} exceeds cap {cap}",
+                ))
+                
+    return violations
+
+
+def check_all_exams(
+    assignments: list['ExamSessionResult'],
+    inp: SolverInput,
+) -> list[Violation]:
+    """Run H12-H14 checks and return combined violations."""
+    violations = []
+    violations.extend(check_h12_student_exam_overlap(assignments, inp))
+    violations.extend(check_h13_exam_room_capacity(assignments, inp))
+    violations.extend(check_h14_invigilator_double_booking(assignments, inp))
     return violations

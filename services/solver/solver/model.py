@@ -1,7 +1,12 @@
 """CP-SAT solver model — one builder function per H-code (§9.3).
 
-Decision variable: assign[f, c, k, r, s] ∈ {0, 1}
+Class Timetable Decision variable: assign[f, c, k, r, s] ∈ {0, 1}
   Staff f teaches course c to cohort k in room r at slot s.
+
+Exam Timetable Decision variable (Phase 4): exam_assign[e, i, s] ∈ {0, 1}
+  Exam session e is assigned invigilator i at slot s.
+  - Fixed by pre-processing (not solver decisions): room, cohort, course, and exact student seating for the exam session.
+  - CP-SAT decisions: Which slot `s` the exam session occurs in, and which invigilator `i` is assigned.
 
 H5 (eligibility) and H9 (room type match) are enforced by construction —
 variables are only created for valid (f,c,k) and (c,r) pairs.
@@ -12,7 +17,7 @@ created for slot indices present in the period_slots input.
 
 from ortools.sat.python import cp_model
 
-from solver.data_types import AssignmentResult, SolverInput
+from solver.data_types import AssignmentResult, ExamSessionResult, SolverInput
 
 
 # ---------- Room-type matching for H9 (Phase 1 simplification) ----------
@@ -212,14 +217,90 @@ def build_h11_no_student_double_booking(
                 model.Add(sum(student_vars_at_slot) <= 1)
 
 
+# ---------- Exam Builder functions (Phase 4) ----------
+
+
+def build_h12_student_exam_overlap(
+    model: cp_model.CpModel,
+    exam_assign: dict,
+    inp: SolverInput,
+):
+    """H12: No student has two overlapping exam sessions."""
+    for student in inp.students_exams:
+        for s in range(inp.num_slots):
+            vars_at_slot = [
+                v for (e, i, sv), v in exam_assign.items()
+                if sv == s and e in student.exam_session_ids
+            ]
+            if vars_at_slot:
+                model.Add(sum(vars_at_slot) <= 1)
+
+
+def build_h13_exam_room_capacity(
+    model: cp_model.CpModel,
+    exam_assign: dict,
+    inp: SolverInput,
+):
+    """H13: Exam-room seating capacity is never exceeded at any slot.
+    Allows multiple exam sessions to share a room if capacity permits.
+    """
+    rooms_by_id = {r.id: r for r in inp.rooms}
+    sessions_by_id = {s.id: s for s in inp.exam_sessions}
+
+    for r in inp.rooms:
+        for s in range(inp.num_slots):
+            vars_in_room = [
+                v for (e, i, sv), v in exam_assign.items()
+                if sv == s and sessions_by_id[e].room_id == r.id
+            ]
+            if vars_in_room:
+                # Sum of (is_active * num_students) <= capacity
+                model.Add(
+                    sum(v * sessions_by_id[e].num_students for (e, i, sv), v in exam_assign.items() if sv == s and sessions_by_id[e].room_id == r.id)
+                    <= r.capacity
+                )
+
+
+def build_h14_invigilator_double_booking(
+    model: cp_model.CpModel,
+    exam_assign: dict,
+    faculty_ids: list[str],
+    inp: SolverInput,
+):
+    """H14: Invigilators are not double-booked and respect workload/availability."""
+    # 1. No double booking
+    for f in faculty_ids:
+        for s in range(inp.num_slots):
+            vars_at_slot = [v for (e, i, sv), v in exam_assign.items() if i == f and sv == s]
+            if vars_at_slot:
+                model.Add(sum(vars_at_slot) <= 1)
+
+    # 2. Unavailable blocks
+    blocked_set: dict[str, set[int]] = {}
+    for b in inp.blocked_slots:
+        blocked_set.setdefault(b.faculty_id, set()).add(b.slot_index)
+
+    for (e, i, s), v in exam_assign.items():
+        if s in blocked_set.get(i, set()):
+            model.Add(v == 0)
+
+    # 3. Workload caps
+    faculty_by_id = {f.id: f for f in inp.faculty}
+    for f_data in inp.faculty:
+        f = f_data.id
+        all_vars = [v for (e, i, s), v in exam_assign.items() if i == f]
+        if all_vars:
+            model.Add(sum(all_vars) <= f_data.workload_cap_week)
+
+        for day, day_slots in inp.slots_per_day.items():
+            day_vars = [v for (e, i, s), v in exam_assign.items() if i == f and s in day_slots]
+            if day_vars:
+                model.Add(sum(day_vars) <= f_data.workload_cap_day)
+
+
 # ---------- Main solve function ----------
 
-
-def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult] | None:
-    """Build the CP-SAT model, apply H1–H11, and solve.
-
-    Returns a list of AssignmentResult on success, or None if infeasible.
-    """
+def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentResult] | None:
     model = cp_model.CpModel()
 
     batches_by_id = {b.id: b for b in inp.batches}
@@ -300,3 +381,72 @@ def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult]
             ))
 
     return results
+
+
+def _solve_exams(inp: SolverInput, timeout_seconds: int) -> list[ExamSessionResult] | None:
+    model = cp_model.CpModel()
+
+    # Valid slot indices (H7 by construction)
+    valid_slots = set(ps.slot_index for ps in inp.period_slots)
+
+    # exam_assign[e, i, s]
+    exam_assign: dict[tuple[str, str, int], cp_model.IntVar] = {}
+
+    for session in inp.exam_sessions:
+        e = session.id
+        for faculty in inp.faculty:
+            i = faculty.id
+            for s in valid_slots:
+                var_name = f"exam_assign_{e}_{i}_{s}"
+                exam_assign[(e, i, s)] = model.NewBoolVar(var_name)
+
+        # Every exam session MUST be scheduled exactly once (one slot, one invigilator)
+        session_vars = [v for (ev, iv, sv), v in exam_assign.items() if ev == e]
+        if session_vars:
+            model.AddExactlyOne(session_vars)
+
+    if not exam_assign:
+        return None
+
+    faculty_ids = [f.id for f in inp.faculty]
+
+    # Apply Exam Hard Constraints
+    build_h12_student_exam_overlap(model, exam_assign, inp)
+    build_h13_exam_room_capacity(model, exam_assign, inp)
+    build_h14_invigilator_double_booking(model, exam_assign, faculty_ids, inp)
+
+    # Apply S9 (Soft Objective)
+    from solver.objective import add_s9_exam_spread
+    add_s9_exam_spread(model, exam_assign, inp)
+
+    # Solve
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = timeout_seconds
+    status = solver.Solve(model)
+
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return None
+
+    results = []
+    sessions_by_id = {s.id: s for s in inp.exam_sessions}
+    for (e, i, s), v in exam_assign.items():
+        if solver.Value(v) == 1:
+            results.append(ExamSessionResult(
+                id=e,
+                room_id=sessions_by_id[e].room_id,
+                invigilator_staff_profile_id=i,
+                slot_index=s,
+            ))
+
+    return results
+
+
+def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult] | list[ExamSessionResult] | None:
+    """Build the CP-SAT model, apply constraints, and solve.
+
+    Returns a list of AssignmentResult or ExamSessionResult on success, or None if infeasible.
+    """
+    if inp.is_exam:
+        return _solve_exams(inp, timeout_seconds)
+    else:
+        return _solve_classes(inp, timeout_seconds)

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { GeneratePage } from './pages/GeneratePage';
 import { StudentViewPage } from './features/faculty-student-view/StudentViewPage';
+import { ExamViews } from './features/exam-module/ExamViews';
 import './App.css';
 
 function App() {
-  const [currentTab, setCurrentTab] = useState<'generate' | 'students'>('generate');
+  const [currentTab, setCurrentTab] = useState<'generate' | 'students' | 'exams'>('generate');
 
   return (
     <div className="min-h-screen bg-slate-950 p-8 flex flex-col gap-6">
@@ -21,11 +22,18 @@ function App() {
         >
           Student View
         </button>
+        <button
+          onClick={() => setCurrentTab('exams')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'exams' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+        >
+          Exams
+        </button>
       </nav>
 
       <div className="max-w-6xl mx-auto w-full">
         {currentTab === 'generate' && <GeneratePage />}
         {currentTab === 'students' && <StudentViewPage />}
+        {currentTab === 'exams' && <ExamViews />}
       </div>
     </div>
   );

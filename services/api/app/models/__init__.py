@@ -21,10 +21,10 @@ from app.models.student_profile import StudentProfile  # noqa: F401
 from app.models.elective_section import ElectiveSection  # noqa: F401
 from app.models.enrollment_record import EnrollmentRecord  # noqa: F401
 from app.models.batch_membership import BatchMembership  # noqa: F401
+from app.models.exam_timetable_version import ExamTimetableVersion  # noqa: F401
+from app.models.exam_session import ExamSession  # noqa: F401
 from app.models.stubs import (  # noqa: F401
     ExceptionCalendar,
-    ExamTimetableVersion,
-    ExamSession,
     SubstitutionLog,
     AuditLog,
     Notification,

@@ -124,7 +124,18 @@ async def seed_demo_dataset():
         elig_lab2 = Eligibility(tenant_id=tenant.id, staff_profile_id=teacher2.id, course_id=lab_course.id, cohort_id=cohort.id, batch_id=batch2.id)
         elig_elec = Eligibility(tenant_id=tenant.id, staff_profile_id=teacher1.id, course_id=elective_course.id, cohort_id=cohort.id)  # Wait, elective uses a derived cohort?
 
-        session.add_all([elig_core, elig_lab1, elig_lab2])
+        session.add_all([elig_core, elig_lab1, elig_lab2, elig_elec])
+        await session.commit()
+        
+        # Add Exam Period Exception
+        from app.models.stubs import ExceptionCalendar
+        exam_period = ExceptionCalendar(
+            tenant_id=tenant.id,
+            date=datetime.date(2026, 12, 10),
+            type="exam_period",
+            description="Fall 2026 Final Exams"
+        )
+        session.add(exam_period)
         await session.commit()
 
         print(f"Seed complete. Tenant ID: {tenant.id}")
