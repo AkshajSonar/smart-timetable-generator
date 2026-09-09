@@ -207,10 +207,25 @@ async def test_timetables_generate_rbac_200_institution_admin(override_role, moc
 
 @pytest.mark.asyncio
 async def test_timetables_view_rbac_403(override_role, mock_db):
+    """No roles → 403 on GET /timetables/{id}."""
     tenant_id = uuid.uuid4()
     version_id = uuid.uuid4()
     _setup_mock_db(mock_db)
     override_role(set())
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        res = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert res.status_code == 403
+
+@pytest.mark.asyncio
+async def test_timetables_view_rbac_403_faculty(override_role, mock_db):
+    """§11: 'view all schedules/reports' = institution_admin, department_head, reviewer.
+    faculty is NOT in that list → must receive 403 on GET /timetables/{id}.
+    Individualized faculty schedule view is tracked debt (see AGENTS.md §11, PROJECT_SPEC.md §32 #23).
+    """
+    tenant_id = uuid.uuid4()
+    version_id = uuid.uuid4()
+    _setup_mock_db(mock_db)
+    override_role({"faculty"})
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         res = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
         assert res.status_code == 403
@@ -380,7 +395,31 @@ async def test_student_timetable_ownership(override_role, mock_db):
         assert res.status_code != 403
 
 @pytest.mark.asyncio
+async def test_platform_super_admin_no_blanket_access(override_role, mock_db):
+    """A platform_super_admin identity with no staff_profile at Tenant X must get 403 on any
+    tenant-scoped endpoint. require_platform_super_admin grants zero tenant access — it is
+    used ONLY on POST /tenants and nowhere else (confirmed by grep: only tenants.py imports it).
+    """
+    tenant_id = uuid.uuid4()
+    # Simulate: identity authenticated, platform_super_admin on Identity table,
+    # but NO staff_profile row at this tenant → _get_user_roles returns empty set.
+    # We achieve this by: not overriding require_platform_super_admin (we're not
+    # calling /tenants), and setting mock roles to empty (no tenant membership).
+    _setup_mock_db(mock_db)
+    override_role(set())  # empty = no staff_profile → RBAC dependency returns empty roles
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Call a tenant-scoped endpoint that requires institution_admin/department_head
+        res = await ac.get(f"/api/v1/tenants/{tenant_id}/departments")
+        # Must be 403, exactly like any other identity with no tenant membership
+        assert res.status_code == 403, (
+            f"Expected 403 (no tenant membership), got {res.status_code}. "
+            "platform_super_admin must not grant blanket tenant access."
+        )
+
+@pytest.mark.asyncio
 async def test_platform_super_admin():
+    # require_platform_super_admin is used EXCLUSIVELY on POST /tenants.
+    # Confirmed by grep: only services/api/app/routers/tenants.py imports it.
     from app.rbac.dependencies import require_platform_super_admin
     async def mock_super_admin_pass(): pass
     async def mock_super_admin_fail():

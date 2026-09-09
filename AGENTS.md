@@ -496,6 +496,10 @@ than one at the same tenant): `institution_admin`, `department_head`,
 the RBAC check as a single reusable dependency reading this table (put it
 in `services/api/app/rbac/`), not ad hoc per-router checks.
 
+*(TODO #1: `department_head` is currently implemented with tenant-wide write access as a tracked gap. A resource-department match against the caller's `staff_profile` is required.)*
+
+*(TODO #2: Individualized faculty schedule view — `GET /timetables/{id}` is currently restricted to `institution_admin`, `department_head`, `reviewer` per §11 "view all schedules/reports". Faculty should eventually have a read-only view of their own assigned slots (mirrors `GET /students/{id}/timetable`). This is tracked debt; implement as a separate endpoint or a role-scoped filter on the existing one. See PROJECT_SPEC.md §32 #23.)*
+
 ---
 
 ## 12. Natural-Language Rule Builder Pipeline (spec §20)
