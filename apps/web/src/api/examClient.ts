@@ -1,3 +1,5 @@
+import { getBearerToken } from './client';
+
 const API_BASE = 'http://localhost:8000/api/v1';
 
 export interface ExamSessionResult {
@@ -19,9 +21,15 @@ export interface ExamGenerateResponse {
 
 export const examClient = {
     async generateExams(tenantId: string, termId: string): Promise<ExamGenerateResponse> {
+        const token = getBearerToken();
+        const headers: HeadersInit = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         const res = await fetch(`${API_BASE}/tenants/${tenantId}/exams/generate`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ term_id: termId }),
         });
         

@@ -3,7 +3,7 @@
  * Phase 1: no auth, user supplies tenantId manually.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api, type TimetableVersion, type LoadVerificationReport } from '../api/client';
 import { TimetableGrid } from '../features/timetable-grid/TimetableGrid';
 
@@ -11,11 +11,21 @@ type Status = 'idle' | 'loading-cohorts' | 'ready' | 'generating' | 'done' | 'er
 
 export function GeneratePage() {
   const [tenantId, setTenantId] = useState('');
+  const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [timetable, setTimetable] = useState<TimetableVersion | null>(null);
   const [report, setReport] = useState<LoadVerificationReport | null>(null);
   const [violations, setViolations] = useState<{ h_code: string; message: string }[]>([]);
+
+  useEffect(() => {
+    api.users.getTenants().then(res => {
+      setTenants(res.tenants);
+      if (res.tenants.length > 0) {
+        setTenantId(res.tenants[0].id);
+      }
+    }).catch(err => console.error(err));
+  }, []);
 
   async function generate() {
     if (!tenantId.trim()) return;
@@ -74,10 +84,8 @@ export function GeneratePage() {
               <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                 Tenant ID (UUID)
               </label>
-              <input
+              <select
                 id="tenant-id-input"
-                type="text"
-                placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
                 value={tenantId}
                 onChange={e => setTenantId(e.target.value)}
                 className="w-full rounded-lg px-4 py-2.5 text-sm font-mono outline-none transition-all"
@@ -88,7 +96,11 @@ export function GeneratePage() {
                 }}
                 onFocus={e => e.currentTarget.style.borderColor = 'var(--border-accent)'}
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
-              />
+              >
+                {tenants.map(t => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.id})</option>
+                ))}
+              </select>
             </div>
               <button
                 id="generate-btn"

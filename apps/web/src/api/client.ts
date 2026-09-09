@@ -3,11 +3,27 @@
  * Base URL defaults to the Vite dev proxy (same origin) or VITE_API_URL env var.
  */
 
+let bearerToken: string | null = null;
+export function setBearerToken(token: string | null) {
+  bearerToken = token;
+}
+export function getBearerToken() {
+  return bearerToken;
+}
+
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...init?.headers,
+  };
+  if (bearerToken) {
+    headers['Authorization'] = `Bearer ${bearerToken}`;
+  }
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers,
     ...init,
   });
   if (!res.ok) {
@@ -101,5 +117,9 @@ export const api = {
   reports: {
     getVerification: (tenantId: string, versionId: string) =>
       request<LoadVerificationReport>(`/api/v1/tenants/${tenantId}/reports/verification?version_id=${versionId}`),
+  },
+  users: {
+    getTenants: () =>
+      request<{ tenants: { id: string; name: string }[] }>(`/api/v1/me/tenants`),
   }
 };
