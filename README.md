@@ -5,7 +5,8 @@ A multi-tenant SaaS scheduling engine that creates **provably conflict-free** ti
 ## Quick Start (Phase 1 — Local Dev)
 
 ```bash
-# 1. Start Postgres + Redis
+# 1. Start Postgres + Redis + Keycloak
+# Note: Postgres runs on port 5433, Keycloak runs on port 8080
 docker compose up -d
 
 # 2. API service

@@ -1,0 +1,28 @@
+{
+  "id": "timetable",
+  "realm": "timetable",
+  "enabled": true,
+  "users": [
+    {"username": "institution_admin", "enabled": true, "email": "admin@timetable.local", "credentials": [{"type": "password", "value": "password"}]},
+    {"username": "department_head", "enabled": true, "email": "head@timetable.local", "credentials": [{"type": "password", "value": "password"}]},
+    {"username": "reviewer", "enabled": true, "email": "reviewer@timetable.local", "credentials": [{"type": "password", "value": "password"}]},
+    {"username": "faculty", "enabled": true, "email": "faculty@timetable.local", "credentials": [{"type": "password", "value": "password"}]},
+    {"username": "platform_super_admin", "enabled": true, "email": "superadmin@timetable.local", "credentials": [{"type": "password", "value": "password"}]},
+    {"username": "student", "enabled": true, "email": "student@timetable.local", "credentials": [{"type": "password", "value": "password"}]}
+  ],
+  "clients": [
+    {
+      "clientId": "timetable-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173", "+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ]
+}

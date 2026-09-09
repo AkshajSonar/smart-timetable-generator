@@ -157,38 +157,11 @@ don't ask.
 
 ---
 
-## 5. Open Infra Decision — lock this before Phase 1
+## 5. Infra Decision (Locked)
 
-The spec locks *Postgres + RLS* and *Keycloak/Auth0* as the auth approach
-(§13), but doesn't lock a hosting provider. You're evaluating MCP-connected
-options that imply two different paths — **pick one and delete this
-section's other branch** before writing any infra code, since it changes
-the DB connection story and possibly the auth provider:
-
-**Option A — GCP-native:** Cloud SQL or AlloyDB for the Postgres instance
-(administered directly via the Google Data Cloud MCP server), API/solver
-services on Cloud Run or GKE, frontend deployed via the Firebase MCP
-server. Keeps Keycloak/Auth0 exactly as specified. More setup, closer to
-the "Kubernetes as production target" line in §13.
-**Best fit if:** you want the demo environment to look like the intended
-production shape.
-
-**Option B — Supabase-in-one:** Supabase gives Postgres + RLS + Auth as a
-single managed service (connectable via the Supabase MCP server), which
-would *replace* Keycloak/Auth0 from §13 with Supabase Auth. This is a
-deviation from the locked stack and should be called out explicitly in a
-commit/PR description if chosen, since §13's auth rationale (cross-tenant
-Identity via Keycloak/Auth0) needs to be re-verified against whatever
-Supabase Auth's multi-tenant story actually supports.
-**Best fit if:** hackathon time pressure dominates and you want
-Postgres+RLS+Auth stood up in one step.
-
-**Option C — Pure local:** Docker Compose Postgres only (the spec's own
-demo default, §13), defer any cloud choice past the hackathon.
-**Best fit if:** you're not deploying anywhere before the deadline.
-
-Whichever is chosen, update §4's Auth row and §15 references in this file
-so the next agent session doesn't re-litigate it.
+The spec locks *Postgres + RLS* and *Keycloak/Auth0* as the auth approach (§13). 
+This project has locked in **Option C — Pure local**, augmented with Keycloak, as the deployment architecture. 
+The demo environment relies entirely on Docker Compose for Postgres, Redis, and Keycloak, avoiding cloud dependency for the demo. Keycloak serves standard OIDC flows for Auth.
 
 ---
 
@@ -624,6 +597,7 @@ Docker Compose services (demo target per §13):
 
 - `postgres` — with RLS policies applied via migrations, per §10 above
 - `redis` — Celery broker/result backend
+- `keycloak` — Identity Provider for Auth/JWT
 - `api` — FastAPI app
 - `solver-worker` — Celery worker running the CP-SAT solve tasks
 - `web` — Vite dev server for the React app
