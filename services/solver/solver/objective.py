@@ -3,11 +3,15 @@
 from ortools.sat.python import cp_model
 from solver.data_types import SolverInput
 
+# Named constant for S9 penalty weight.
+# We set this to 50 as a moderate penalty: consecutive-day exams are highly undesirable
+# for student well-being (S9), but are soft constraints (must not override hard constraints).
+S9_CONSECUTIVE_DAY_PENALTY_WEIGHT = 50
+
 def add_s9_exam_spread(
     model: cp_model.CpModel,
     exam_assign: dict,
     inp: SolverInput,
-    weight: int = 50,
 ):
     """S9 (exam): Spread a student's exams evenly; minimize consecutive-day exams."""
     # For each student, if they have an exam on day D and day D+1, penalize.
@@ -63,4 +67,4 @@ def add_s9_exam_spread(
         # Currently we only have this one soft constraint.
         # But we can maintain an objective expression.
         # Actually, model.Minimize(sum(penalties) * weight) works.
-        model.Minimize(sum(penalties) * weight)
+        model.Minimize(sum(penalties) * S9_CONSECUTIVE_DAY_PENALTY_WEIGHT)

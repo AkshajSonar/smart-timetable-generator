@@ -1,10 +1,10 @@
 from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 
-from app.models.base import Base, new_uuid
+from app.models.base import Base, TenantMixin, new_uuid
 
 
-class ExamSession(Base):
+class ExamSession(Base, TenantMixin):
     __tablename__ = "exam_session"
     id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     exam_timetable_version_id = Column(UUID(as_uuid=True), ForeignKey("exam_timetable_version.id"), nullable=False)

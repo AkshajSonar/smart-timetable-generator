@@ -16,6 +16,7 @@ from app.models.staff_availability_block import StaffAvailabilityBlock
 from app.models.staff_profile import StaffProfile
 from app.models.exam_timetable_version import ExamTimetableVersion
 from app.models.exam_session import ExamSession
+from app.models.stubs import ExceptionCalendar
 from app.models.student_profile import StudentProfile
 from app.models.enrollment_record import EnrollmentRecord
 from app.models.elective_section import ElectiveSection
@@ -71,8 +72,13 @@ async def generate_exam_timetable(
     rooms_result = await db.execute(select(Room))
     rooms = list(rooms_result.scalars().all())
 
+    # 1.5 Load Exam Periods from ExceptionCalendar
+    exc_result = await db.execute(select(ExceptionCalendar).where(ExceptionCalendar.type == "exam_period"))
+    exam_dates = list(exc_result.scalars().all())
+    exam_weekdays = {d.date.weekday() for d in exam_dates} if exam_dates else set(range(7)) # Default to all if none seeded
+
     pt_result = await db.execute(select(PeriodTemplate).order_by(PeriodTemplate.weekday, PeriodTemplate.period_index))
-    period_templates = list(pt_result.scalars().all())
+    period_templates = [pt for pt in pt_result.scalars().all() if pt.weekday in exam_weekdays]
 
     blocked_result = await db.execute(
         select(StaffAvailabilityBlock).where(
@@ -219,6 +225,7 @@ async def generate_exam_timetable(
     for r in results:
         session_row = ExamSession(
             id=UUID(r.id),
+            tenant_id=tenantId,
             exam_timetable_version_id=tv.id,
             course_id=UUID([s for s in solver_exam_sessions if s.id == r.id][0].course_id),
             cohort_id=UUID([s for s in solver_exam_sessions if s.id == r.id][0].cohort_id),
