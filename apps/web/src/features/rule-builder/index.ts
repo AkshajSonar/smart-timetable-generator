@@ -1,1 +1,1 @@
-// Stub — Phase 2+
+export { RuleBuilderPage } from './RuleBuilderPage';
