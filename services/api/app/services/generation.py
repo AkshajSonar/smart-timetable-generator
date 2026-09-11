@@ -190,12 +190,14 @@ async def build_solver_input(
     solver_students = []
     for s in db_students:
         s_courses_set = set()
+        
+        # 1. Core/Lab/Studio (from home cohort)
         for e in eligibilities:
             if e.cohort_id != s.cohort_id:
                 continue
 
             course = courses.get(e.course_id)
-            if not course:
+            if not course or course.type == "elective":
                 continue
 
             batches_for_course = [b for b in batches if b.course_id == e.course_id and b.cohort_id == s.cohort_id]
@@ -207,14 +209,16 @@ async def build_solver_input(
                         s_courses_set.add((str(course.id), str(s.cohort_id), str(b.id)))
                         break
             else:
-                if course.type == "elective":
-                    if course.id in student_electives.get(s.id, []):
-                        # Use the eligibility cohort_id (what assign vars were built with),
-                        # not the student's home cohort — they differ for cross-dept electives.
-                        elig_cohort = elective_elig_cohort.get(course.id, s.cohort_id)
-                        s_courses_set.add((str(course.id), str(elig_cohort), None))
-                else:
-                    s_courses_set.add((str(course.id), str(s.cohort_id), None))
+                s_courses_set.add((str(course.id), str(s.cohort_id), None))
+
+        # 2. Electives (from enrollments)
+        for course_id in student_electives.get(s.id, []):
+            course = courses.get(course_id)
+            if course:
+                # Use the eligibility cohort_id (what assign vars were built with),
+                # not the student's home cohort — they differ for cross-dept electives.
+                elig_cohort = elective_elig_cohort.get(course.id, s.cohort_id)
+                s_courses_set.add((str(course.id), str(elig_cohort), None))
 
         s_courses_list = [StudentCourseData(course_id=c, cohort_id=k, batch_id=b) for (c, k, b) in s_courses_set]
         solver_students.append(StudentData(id=str(s.id), courses=s_courses_list))
