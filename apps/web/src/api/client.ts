@@ -142,6 +142,8 @@ export const api = {
       }),
   },
   staff: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<any>>(`/api/v1/tenants/${tenantId}/staff-profiles?limit=500`),
     getTimetable: (tenantId: string, staffId: string) =>
       request<Assignment[]>(`/api/v1/tenants/${tenantId}/staff-profiles/${staffId}/timetable`),
   },

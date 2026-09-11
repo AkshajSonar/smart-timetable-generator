@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { GeneratePage } from './pages/GeneratePage';
-import { StudentViewPage } from './features/faculty-student-view/StudentViewPage';
+import { StudentViewPage, FacultyViewPage } from './features/faculty-student-view';
 import { ExamViews } from './features/exam-module/ExamViews';
 import { PublishPage } from './features/publish/PublishPage';
 import { RuleBuilderPage } from './features/rule-builder/RuleBuilderPage';
 import './App.css';
 
 function App() {
-  const [currentTab, setCurrentTab] = useState<'generate' | 'students' | 'exams' | 'publish' | 'rules'>('generate');
+  const [currentTab, setCurrentTab] = useState<'generate' | 'faculty' | 'students' | 'exams' | 'publish' | 'rules'>('generate');
 
   return (
     <div className="min-h-screen bg-slate-950 p-8 flex flex-col gap-6">
@@ -31,6 +31,12 @@ function App() {
           Rule Builder
         </button>
         <button
+          onClick={() => setCurrentTab('faculty')}
+          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'faculty' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+        >
+          Faculty View
+        </button>
+        <button
           onClick={() => setCurrentTab('students')}
           className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'students' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
         >
@@ -48,6 +54,7 @@ function App() {
         {currentTab === 'generate' && <GeneratePage />}
         {currentTab === 'publish' && <PublishPage />}
         {currentTab === 'rules' && <RuleBuilderPage />}
+        {currentTab === 'faculty' && <FacultyViewPage />}
         {currentTab === 'students' && <StudentViewPage />}
         {currentTab === 'exams' && <ExamViews />}
       </div>
