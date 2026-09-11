@@ -68,6 +68,19 @@ async def get_student_timetable(
     if not tv:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Version not found"}})
 
+    if tv.state not in ("published", "archived"):
+        staff_res = await db.execute(
+            select(StaffProfile.roles).where(
+                StaffProfile.identity_id == identity_id,
+                StaffProfile.tenant_id == tenantId
+            )
+        )
+        roles = staff_res.scalar_one_or_none() or []
+        allowed_admin = {"institution_admin", "department_head", "reviewer"}
+        if not allowed_admin.intersection(roles):
+            raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Can only view published timetables"}})
+
+
     # Fetch student's specific batches
     bm_result = await db.execute(
         select(BatchMembership).where(BatchMembership.student_profile_id == studentId)

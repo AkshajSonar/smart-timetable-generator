@@ -134,6 +134,7 @@ already been explicitly resolved (see spec §24 resolution log).
    row-level security keyed on `tenant_id` — not just an application-layer
    `WHERE tenant_id = ...` that a future query could forget to add
    (NFR-16, §15.1, §29.2).
+   *Note: `GET /me/tenants` is a deliberate, justified exception to this invariant. It uses `get_db_superuser` to bypass RLS for its cross-tenant scan, because answering "which tenants does this identity belong to" is structurally impossible under a single tenant-scoped RLS session. This is the only place in the codebase that does this; every other query path remains RLS-scoped.*
 4. **The JWT carries only `identity_id`, never `tenant_id`.** One Identity
    can hold staff/student profiles at multiple tenants (FR-1.6); tenant
    context is resolved per-request from the `{tenantId}` path param, not
@@ -476,6 +477,7 @@ each has a direct, greppable link to its test in
 ## 11. Code Editing Rules (§17)
 - **Surgical edits over full-file rewrites:** Always prefer small, targeted updates (e.g., using search/replace tools for specific chunks) over replacing the entire content of an existing file.
 - **Diff before commit:** If a full-file rewrite is completely unavoidable, you MUST diff the new file against the prior version before committing to explicitly confirm that nothing (especially untouched imports or helper functions) was unintentionally dropped.
+- **Update tracking artifacts together:** `task.md` must be updated in the same commit as the code/tests it tracks, not in a separate follow-up pass. A stale task list that contradicts a "phase complete" claim is a tracking artifact silently drifting from reality, similar to an unverified test count.
 
 ### Core endpoints (spec §18, condensed)
 
@@ -529,11 +531,7 @@ in `services/api/app/rbac/`), not ad hoc per-router checks.
 
 *(TODO #1: `department_head` is currently implemented with tenant-wide write access as a tracked gap. A resource-department match against the caller's `staff_profile` is required.)*
 
-*(TODO #2: Individualized faculty schedule view — `GET /timetables/{id}` is currently restricted to `institution_admin`, `department_head`, `reviewer` per §11 "view all schedules/reports". Faculty should eventually have a read-only view of their own assigned slots (mirrors `GET /students/{id}/timetable`). This is tracked debt; implement as a separate endpoint or a role-scoped filter on the existing one. See PROJECT_SPEC.md §32 #23.)*
-
 *(TODO #3: Schema-per-tenant isolation — §15.1 calls for dynamic schema creation and schema-scoped migrations when `tenant.isolation_mode = 'schema'`. This is tracked debt. The column is stored but the system universally enforces Row-Level Security via Postgres `current_setting` as the active mechanism for all tiers. See PROJECT_SPEC.md §32 #25.)*
-
-*(TODO #4: Frontend read-paths currently query raw `Assignment` and `ExamSession` tables, bypassing the CQRS read models. The frontend needs to be repointed to the denormalized `PublishedSchedule` table, which may require adding new read endpoints like `GET /published-schedules`. See PROJECT_SPEC.md §32 #24.)*
 
 ---
 
