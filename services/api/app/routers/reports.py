@@ -13,7 +13,7 @@ from app.models.course import Course
 from app.models.eligibility import Eligibility
 from app.models.staff_profile import StaffProfile
 from app.models.timetable_version import TimetableVersion
-from app.schemas.report import LoadVerificationReport, LoadVerificationItem
+from app.schemas.report import LoadVerificationReport, LoadVerificationItem, RoomUtilizationReport, RoomUtilizationItem
 
 from app.rbac.dependencies import require_role
 
@@ -112,3 +112,59 @@ async def get_verification_report(
         faculty_load=faculty_items,
         cohort_load=cohort_items
     )
+
+
+@router.get("/room-utilization", response_model=RoomUtilizationReport)
+async def get_room_utilization_report(
+    tenantId: UUID,
+    version_id: UUID = Query(..., description="The ID of the timetable version to report on"),
+    db: AsyncSession = Depends(set_tenant_context),
+):
+    """Auto-generated room utilization report."""
+    from app.models.room import Room
+    from app.models.period_template import PeriodTemplate
+    from app.services.schedule_mapper import get_dual_routed_schedules
+
+    # Verify version exists
+    tv = await db.execute(select(TimetableVersion).where(TimetableVersion.id == version_id))
+    tv_obj = tv.scalar_one_or_none()
+    if not tv_obj:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Timetable version not found"}})
+
+    # Fetch all period templates to determine total available hours in a week
+    pt_res = await db.execute(select(PeriodTemplate))
+    period_templates = list(pt_res.scalars().all())
+    available_hours = len(period_templates)
+
+    # Fetch all rooms
+    room_res = await db.execute(select(Room))
+    rooms = list(room_res.scalars().all())
+
+    # Fetch schedules (dual-routed)
+    # We only care about class schedules for room utilization currently
+    # Exam sessions also use rooms, so we can fetch those too if needed, but for now we fetch classes.
+    # To get complete room utilization, we fetch both if the state allows.
+    class_schedules = await get_dual_routed_schedules(db, version_id, tv_obj.state, 'class')
+    exam_schedules = await get_dual_routed_schedules(db, version_id, tv_obj.state, 'exam')
+    all_schedules = class_schedules + exam_schedules
+
+    scheduled_hours_per_room: dict[UUID, int] = defaultdict(int)
+    for sched in all_schedules:
+        if sched.room_id:
+            scheduled_hours_per_room[sched.room_id] += sched.slot_span
+
+    room_items = []
+    for room in rooms:
+        sch = scheduled_hours_per_room.get(room.id, 0)
+        pct = (sch / available_hours * 100) if available_hours > 0 else 0.0
+        room_items.append(RoomUtilizationItem(
+            room_id=room.id,
+            room_name=room.name,
+            capacity=room.capacity,
+            available_hours=available_hours,
+            scheduled_hours=sch,
+            utilization_percentage=round(pct, 2)
+        ))
+
+    return RoomUtilizationReport(rooms=room_items)
+

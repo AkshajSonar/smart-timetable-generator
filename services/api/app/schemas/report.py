@@ -16,3 +16,16 @@ class LoadVerificationReport(BaseModel):
     faculty_load: list[LoadVerificationItem]
     cohort_load: list[LoadVerificationItem]
 
+
+class RoomUtilizationItem(BaseModel):
+    room_id: UUID
+    room_name: str
+    capacity: int
+    available_hours: int
+    scheduled_hours: int
+    utilization_percentage: float
+
+
+class RoomUtilizationReport(BaseModel):
+    rooms: list[RoomUtilizationItem]
+
