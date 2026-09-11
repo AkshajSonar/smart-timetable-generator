@@ -12,7 +12,7 @@ from solver.model import solve
 from solver.conflict_checker import check_all
 
 async def test_generation():
-    tenant_id_str = "782f5084-efbc-4aa5-a581-035b77d4de08"
+    tenant_id_str = "d1c8367d-84fe-44b5-ad32-658dfdb46804"
     tenant_id = uuid.UUID(tenant_id_str)
     
     async with AsyncSessionLocal() as session:
