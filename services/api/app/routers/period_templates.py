@@ -10,7 +10,10 @@ from app.models.period_template import PeriodTemplate
 from app.schemas.common import PaginatedResponse
 from app.schemas.period_template import PeriodTemplateCreate, PeriodTemplateRead
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/period-templates", tags=["period-templates"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/period-templates", tags=["period-templates"])
 
 
 @router.post("", response_model=PeriodTemplateRead, status_code=201)

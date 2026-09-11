@@ -11,5 +11,6 @@ class Identity(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     email = Column(String, nullable=False, unique=True)
+    full_name = Column(String, nullable=True)
     auth_provider_ref = Column(String, nullable=True)
     platform_role = Column(String, nullable=True)  # 'super_admin' or null

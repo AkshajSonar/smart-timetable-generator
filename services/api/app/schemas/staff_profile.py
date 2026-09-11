@@ -20,6 +20,20 @@ class StaffProfileUpdate(BaseModel):
     roles: Optional[list[str]] = None
 
 
+class StaffInviteRequest(BaseModel):
+    email: str
+    employment_type: str
+    workload_cap_week: int
+    workload_cap_day: int
+    roles: list[str] = []
+
+
+class StaffInviteResponse(BaseModel):
+    staff_profile: 'StaffProfileRead'
+    status: str
+
+
+
 class StaffProfileRead(BaseModel):
     id: UUID
     tenant_id: UUID

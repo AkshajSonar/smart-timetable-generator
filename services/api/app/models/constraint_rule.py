@@ -1,6 +1,6 @@
 """ConstraintRule model — §17."""
 
-from sqlalchemy import Column, Numeric, String
+from sqlalchemy import Column, Numeric, String, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.models.base import Base, TenantMixin, new_uuid
@@ -20,3 +20,10 @@ class ConstraintRule(Base, TenantMixin):
     source = Column(String, nullable=True)  # structured|nl
     raw_input_text = Column(String, nullable=True)
     status = Column(String, nullable=False, server_default="confirmed")
+
+    __table_args__ = (
+        CheckConstraint(
+            status.in_(["pending_confirmation", "confirmed"]),
+            name="constraint_rule_status_check"
+        ),
+    )

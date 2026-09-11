@@ -1,0 +1,362 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.0, pytest-9.1.1, pluggy-1.6.0 -- /Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14
+cachedir: .pytest_cache
+rootdir: /Users/vedantkulkarni/Documents/timetable_generator/services/api
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 44 items
+
+services/api/tests/test_approve_publish.py::test_approve_publish_rbac_403 PASSED [  2%]
+services/api/tests/test_approve_publish.py::test_approve_then_publish_success PASSED [  4%]
+services/api/tests/test_auth_rbac.py::test_departments_rbac_403_faculty FAILED [  6%]
+services/api/tests/test_auth_rbac.py::test_departments_rbac_403_student FAILED [  9%]
+services/api/tests/test_auth_rbac.py::test_departments_rbac_200_institution_admin PASSED [ 11%]
+services/api/tests/test_auth_rbac.py::test_courses_rbac_403_faculty FAILED [ 13%]
+services/api/tests/test_auth_rbac.py::test_courses_rbac_200_institution_admin PASSED [ 15%]
+services/api/tests/test_auth_rbac.py::test_rooms_rbac_403_student FAILED [ 18%]
+services/api/tests/test_auth_rbac.py::test_rooms_rbac_200_institution_admin PASSED [ 20%]
+services/api/tests/test_auth_rbac.py::test_staff_profiles_rbac_403_faculty FAILED [ 22%]
+services/api/tests/test_auth_rbac.py::test_staff_profiles_rbac_200_institution_admin PASSED [ 25%]
+services/api/tests/test_auth_rbac.py::test_eligibility_rbac_403_student FAILED [ 27%]
+services/api/tests/test_auth_rbac.py::test_eligibility_rbac_200_institution_admin PASSED [ 29%]
+services/api/tests/test_auth_rbac.py::test_cohorts_rbac_403_reviewer FAILED [ 31%]
+services/api/tests/test_auth_rbac.py::test_cohorts_rbac_200_institution_admin PASSED [ 34%]
+services/api/tests/test_auth_rbac.py::test_period_templates_rbac_403_faculty FAILED [ 36%]
+services/api/tests/test_auth_rbac.py::test_period_templates_rbac_200_institution_admin PASSED [ 38%]
+services/api/tests/test_auth_rbac.py::test_timetables_generate_rbac_403_reviewer FAILED [ 40%]
+services/api/tests/test_auth_rbac.py::test_timetables_generate_rbac_200_institution_admin PASSED [ 43%]
+services/api/tests/test_auth_rbac.py::test_timetables_view_rbac_403 FAILED [ 45%]
+services/api/tests/test_auth_rbac.py::test_timetables_view_rbac_200_institution_admin PASSED [ 47%]
+services/api/tests/test_auth_rbac.py::test_exams_generate_rbac_403_reviewer FAILED [ 50%]
+services/api/tests/test_auth_rbac.py::test_exams_generate_rbac_403_faculty FAILED [ 52%]
+services/api/tests/test_auth_rbac.py::test_exams_generate_rbac_200_institution_admin PASSED [ 54%]
+services/api/tests/test_auth_rbac.py::test_exams_sessions_rbac_403_faculty FAILED [ 56%]
+services/api/tests/test_auth_rbac.py::test_exams_sessions_rbac_403_student FAILED [ 59%]
+services/api/tests/test_auth_rbac.py::test_exams_sessions_rbac_200_institution_admin PASSED [ 61%]
+services/api/tests/test_auth_rbac.py::test_import_data_rbac_403_department_head FAILED [ 63%]
+services/api/tests/test_auth_rbac.py::test_import_data_rbac_200_institution_admin PASSED [ 65%]
+services/api/tests/test_auth_rbac.py::test_reports_verification_rbac_403_student FAILED [ 68%]
+services/api/tests/test_auth_rbac.py::test_reports_verification_rbac_200_institution_admin PASSED [ 70%]
+services/api/tests/test_auth_rbac.py::test_users_me_tenants_unguarded PASSED [ 72%]
+services/api/tests/test_auth_rbac.py::test_roles_db_lookup_end_to_end PASSED [ 75%]
+services/api/tests/test_auth_rbac.py::test_platform_super_admin PASSED   [ 77%]
+services/api/tests/test_auth_rbac.py::test_student_timetable_ownership PASSED [ 79%]
+services/api/tests/test_auth_rbac.py::test_get_timetable_rbac_403_faculty PASSED [ 81%]
+services/api/tests/test_auth_rbac.py::test_platform_super_admin_no_blanket_access PASSED [ 84%]
+services/api/tests/test_edit.py::test_edit_rbac_403_faculty PASSED       [ 86%]
+services/api/tests/test_edit.py::test_edit_rbac_200_department_head PASSED [ 88%]
+services/api/tests/test_edit.py::test_edit_conflict_stale_version_no PASSED [ 90%]
+services/api/tests/test_edit.py::test_edit_rejects_infeasible_change PASSED [ 93%]
+services/api/tests/test_edit.py::test_edit_applies_and_increments_version PASSED [ 95%]
+services/api/tests/test_reports.py::test_load_verification_report_not_found PASSED [ 97%]
+services/api/tests/test_rls.py::test_rls_sql_enforcement PASSED          [100%]
+
+=================================== FAILURES ===================================
+______________________ test_departments_rbac_403_faculty _______________________
+
+override_role = <function override_role.<locals>._set at 0x10ef42610>
+mock_db = <AsyncMock id='4544429232'>
+
+    @pytest.mark.asyncio
+    async def test_departments_rbac_403_faculty(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"faculty"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/departments")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:46: AssertionError
+______________________ test_departments_rbac_403_student _______________________
+
+override_role = <function override_role.<locals>._set at 0x10f02cf60>
+mock_db = <AsyncMock id='4545896736'>
+
+    @pytest.mark.asyncio
+    async def test_departments_rbac_403_student(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"student"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/departments")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:56: AssertionError
+________________________ test_courses_rbac_403_faculty _________________________
+
+override_role = <function override_role.<locals>._set at 0x10f02ceb0>
+mock_db = <AsyncMock id='4547071344'>
+
+    @pytest.mark.asyncio
+    async def test_courses_rbac_403_faculty(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"faculty"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/courses")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:76: AssertionError
+_________________________ test_rooms_rbac_403_student __________________________
+
+override_role = <function override_role.<locals>._set at 0x10f02db10>
+mock_db = <AsyncMock id='4547069328'>
+
+    @pytest.mark.asyncio
+    async def test_rooms_rbac_403_student(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"student"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/rooms")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:96: AssertionError
+_____________________ test_staff_profiles_rbac_403_faculty _____________________
+
+override_role = <function override_role.<locals>._set at 0x10f02d0c0>
+mock_db = <AsyncMock id='4547076048'>
+
+    @pytest.mark.asyncio
+    async def test_staff_profiles_rbac_403_faculty(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"faculty"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/staff-profiles")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:116: AssertionError
+______________________ test_eligibility_rbac_403_student _______________________
+
+override_role = <function override_role.<locals>._set at 0x10f02e350>
+mock_db = <AsyncMock id='4547079744'>
+
+    @pytest.mark.asyncio
+    async def test_eligibility_rbac_403_student(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"student"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/eligibility")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:136: AssertionError
+________________________ test_cohorts_rbac_403_reviewer ________________________
+
+override_role = <function override_role.<locals>._set at 0x10f140300>
+mock_db = <AsyncMock id='4547988176'>
+
+    @pytest.mark.asyncio
+    async def test_cohorts_rbac_403_reviewer(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"reviewer"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/cohorts")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:156: AssertionError
+____________________ test_period_templates_rbac_403_faculty ____________________
+
+override_role = <function override_role.<locals>._set at 0x10f140a90>
+mock_db = <AsyncMock id='4547991872'>
+
+    @pytest.mark.asyncio
+    async def test_period_templates_rbac_403_faculty(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"faculty"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/period-templates")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:176: AssertionError
+__________________ test_timetables_generate_rbac_403_reviewer __________________
+
+override_role = <function override_role.<locals>._set at 0x10f1417a0>
+mock_db = <AsyncMock id='4547995568'>
+
+    @pytest.mark.asyncio
+    async def test_timetables_generate_rbac_403_reviewer(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"reviewer"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post(f"/api/v1/tenants/{tenant_id}/timetables/generate")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:196: AssertionError
+________________________ test_timetables_view_rbac_403 _________________________
+
+override_role = <function override_role.<locals>._set at 0x10f141380>
+mock_db = <AsyncMock id='4547999264'>
+
+    @pytest.mark.asyncio
+    async def test_timetables_view_rbac_403(override_role, mock_db):
+        """No roles → 403 on GET /timetables/{id}."""
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role(set())
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:217: AssertionError
+____________________ test_exams_generate_rbac_403_reviewer _____________________
+
+override_role = <function override_role.<locals>._set at 0x10f141640>
+mock_db = <AsyncMock id='4548232592'>
+
+    @pytest.mark.asyncio
+    async def test_exams_generate_rbac_403_reviewer(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"reviewer"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post(f"/api/v1/tenants/{tenant_id}/exams/generate")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:237: AssertionError
+_____________________ test_exams_generate_rbac_403_faculty _____________________
+
+override_role = <function override_role.<locals>._set at 0x10f142820>
+mock_db = <AsyncMock id='4547070000'>
+
+    @pytest.mark.asyncio
+    async def test_exams_generate_rbac_403_faculty(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"faculty"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post(f"/api/v1/tenants/{tenant_id}/exams/generate")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:247: AssertionError
+_____________________ test_exams_sessions_rbac_403_faculty _____________________
+
+override_role = <function override_role.<locals>._set at 0x10f1422a0>
+mock_db = <AsyncMock id='4548239984'>
+
+    @pytest.mark.asyncio
+    async def test_exams_sessions_rbac_403_faculty(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"faculty"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/exams/sessions")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:267: AssertionError
+_____________________ test_exams_sessions_rbac_403_student _____________________
+
+override_role = <function override_role.<locals>._set at 0x10f10c300>
+mock_db = <AsyncMock id='4548235280'>
+
+    @pytest.mark.asyncio
+    async def test_exams_sessions_rbac_403_student(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"student"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/exams/sessions")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:277: AssertionError
+__________________ test_import_data_rbac_403_department_head ___________________
+
+override_role = <function override_role.<locals>._set at 0x10f10c0f0>
+mock_db = <AsyncMock id='4549214288'>
+
+    @pytest.mark.asyncio
+    async def test_import_data_rbac_403_department_head(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"department_head"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post(f"/api/v1/tenants/{tenant_id}/import/enrollment")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:297: AssertionError
+__________________ test_reports_verification_rbac_403_student __________________
+
+override_role = <function override_role.<locals>._set at 0x10f10c510>
+mock_db = <AsyncMock id='4549217984'>
+
+    @pytest.mark.asyncio
+    async def test_reports_verification_rbac_403_student(override_role, mock_db):
+        tenant_id = uuid.uuid4()
+        version_id = uuid.uuid4()
+        _setup_mock_db(mock_db)
+        override_role({"student"})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/reports/verification?version_id={version_id}")
+>           assert res.status_code == 403
+E           assert 401 == 403
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+services/api/tests/test_auth_rbac.py:317: AssertionError
+=========================== short test summary info ============================
+FAILED services/api/tests/test_auth_rbac.py::test_departments_rbac_403_faculty
+FAILED services/api/tests/test_auth_rbac.py::test_departments_rbac_403_student
+FAILED services/api/tests/test_auth_rbac.py::test_courses_rbac_403_faculty - ...
+FAILED services/api/tests/test_auth_rbac.py::test_rooms_rbac_403_student - as...
+FAILED services/api/tests/test_auth_rbac.py::test_staff_profiles_rbac_403_faculty
+FAILED services/api/tests/test_auth_rbac.py::test_eligibility_rbac_403_student
+FAILED services/api/tests/test_auth_rbac.py::test_cohorts_rbac_403_reviewer
+FAILED services/api/tests/test_auth_rbac.py::test_period_templates_rbac_403_faculty
+FAILED services/api/tests/test_auth_rbac.py::test_timetables_generate_rbac_403_reviewer
+FAILED services/api/tests/test_auth_rbac.py::test_timetables_view_rbac_403 - ...
+FAILED services/api/tests/test_auth_rbac.py::test_exams_generate_rbac_403_reviewer
+FAILED services/api/tests/test_auth_rbac.py::test_exams_generate_rbac_403_faculty
+FAILED services/api/tests/test_auth_rbac.py::test_exams_sessions_rbac_403_faculty
+FAILED services/api/tests/test_auth_rbac.py::test_exams_sessions_rbac_403_student
+FAILED services/api/tests/test_auth_rbac.py::test_import_data_rbac_403_department_head
+FAILED services/api/tests/test_auth_rbac.py::test_reports_verification_rbac_403_student
+======================== 16 failed, 28 passed in 3.24s =========================

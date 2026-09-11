@@ -26,13 +26,37 @@ from sqlalchemy import select, text
 async def seed_demo_dataset():
     async with AsyncSessionLocal() as session:
         # Create or Get an Identity
-        result = await session.execute(select(Identity).where(Identity.email == "admin@demo.com"))
-        admin = result.scalar_one_or_none()
-        if not admin:
-            admin = Identity(email="admin@demo.com", auth_provider_ref="demo_admin")
-            session.add(admin)
-            await session.commit()
-            await session.refresh(admin)
+        identities_data = [
+            {"email": "admin@timetable.local", "auth_provider_ref": "institution_admin", "full_name": "Alice Admin", "platform_role": None},
+            {"email": "head@timetable.local", "auth_provider_ref": "department_head", "full_name": "David DeptHead", "platform_role": None},
+            {"email": "reviewer@timetable.local", "auth_provider_ref": "reviewer", "full_name": "Rachel Reviewer", "platform_role": None},
+            {"email": "faculty@timetable.local", "auth_provider_ref": "faculty", "full_name": "Frank Faculty", "platform_role": None},
+            {"email": "superadmin@timetable.local", "auth_provider_ref": "platform_super_admin", "full_name": "Sam Super", "platform_role": "platform_super_admin"},
+            {"email": "student@timetable.local", "auth_provider_ref": "student", "full_name": "Sally Student", "platform_role": None},
+        ]
+
+        seeded_identities = {}
+        for data in identities_data:
+            result = await session.execute(select(Identity).where(Identity.email == data["email"]))
+            identity = result.scalar_one_or_none()
+            if not identity:
+                identity = Identity(
+                    email=data["email"],
+                    auth_provider_ref=data["auth_provider_ref"],
+                    full_name=data["full_name"],
+                    platform_role=data["platform_role"]
+                )
+                session.add(identity)
+                await session.commit()
+                await session.refresh(identity)
+            else:
+                identity.full_name = data["full_name"]
+                session.add(identity)
+                await session.commit()
+                await session.refresh(identity)
+            seeded_identities[data["auth_provider_ref"]] = identity
+            
+        admin = seeded_identities["institution_admin"]
 
         # Create a Tenant
         tenant = Tenant(name="Demo University", institution_type="university", isolation_mode="row")

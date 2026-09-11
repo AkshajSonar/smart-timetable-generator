@@ -2,10 +2,12 @@
 
 from uuid import UUID, uuid4
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import verify_jwt
 from app.core.tenant_context import set_tenant_context
 from app.models.cohort import Cohort
 from app.models.course import Course
@@ -21,6 +23,7 @@ from app.models.student_profile import StudentProfile
 from app.models.enrollment_record import EnrollmentRecord
 from app.models.elective_section import ElectiveSection
 from app.schemas.exam import ExamGenerateRequest, ExamGenerateResponse, ExamSessionRead
+from app.schemas.timetable import StateTransitionRequest
 
 # Import solver
 import sys
@@ -30,11 +33,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..
 router = APIRouter(prefix="/api/v1/tenants/{tenantId}/exams", tags=["exams"])
 
 
+from app.rbac.dependencies import require_role
+
 @router.post("/generate", response_model=ExamGenerateResponse)
 async def generate_exam_timetable(
     tenantId: UUID,
     body: ExamGenerateRequest,
     db: AsyncSession = Depends(set_tenant_context),
+    _role: None = Depends(require_role(["institution_admin", "department_head"]))
 ):
     """Phase 4: Generate exam timetable.
     
@@ -191,6 +197,27 @@ async def generate_exam_timetable(
 
     solver_students_exams = [StudentExamData(id=str(s_id), exam_session_ids=e_ids) for s_id, e_ids in student_exam_map.items()]
 
+    # Fetch confirmed rules
+    from app.models.constraint_rule import ConstraintRule
+    from solver.data_types import RuleData
+    rules_query = await db.execute(
+        select(ConstraintRule).where(
+            ConstraintRule.tenant_id == tenantId,
+            ConstraintRule.status == "confirmed"
+        )
+    )
+    solver_rules = []
+    for r in rules_query.scalars().all():
+        solver_rules.append(RuleData(
+            rule_type=r.rule_type,
+            scope=r.scope,
+            target_id=str(r.target_id) if r.target_id else None,
+            threshold=float(r.threshold) if r.threshold is not None else None,
+            unit=r.unit,
+            polarity=r.polarity,
+            weight=float(r.weight) if r.weight is not None else None
+        ))
+
     solver_input = SolverInput(
         faculty=solver_faculty,
         courses=solver_courses,
@@ -204,6 +231,7 @@ async def generate_exam_timetable(
         is_exam=True,
         exam_sessions=solver_exam_sessions,
         students_exams=solver_students_exams,
+        rules=solver_rules,
     )
 
     # 5. Solve
@@ -246,3 +274,155 @@ async def generate_exam_timetable(
 
     await db.commit()
     return ExamGenerateResponse(success=True, version_id=tv.id, sessions=sessions_out)
+
+@router.get("/sessions", response_model=list[ExamSessionRead])
+async def get_exam_sessions(
+    tenantId: UUID,
+    db: AsyncSession = Depends(set_tenant_context),
+    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer"]))
+):
+    """
+    Get all exam sessions for the current tenant.
+    Restricted to 'view all schedules/reports' roles (institution_admin, department_head, reviewer).
+    """
+    result = await db.execute(select(ExamSession))
+    return result.scalars().all()
+
+@router.post("/timetables/{versionId}/approve")
+async def approve_exam_timetable(
+    tenantId: UUID,
+    versionId: UUID,
+    body: StateTransitionRequest,
+    db: AsyncSession = Depends(set_tenant_context),
+    identity_id: UUID = Depends(verify_jwt),
+    _: None = Depends(require_role(["reviewer"])),
+):
+    from app.models.exam_timetable_version import ExamTimetableVersion
+    from app.models.stubs import AuditLog
+
+    result = await db.execute(select(ExamTimetableVersion).where(ExamTimetableVersion.id == versionId))
+    tv = result.scalar_one_or_none()
+    if not tv:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Exam timetable version not found"}})
+    
+    if tv.version_no != body.version_no:
+        raise HTTPException(status_code=409, detail={"error": {"code": "CONFLICT", "message": f"Stale version_no. DB has {tv.version_no}"}})
+
+    before_state = {"state": tv.state, "approved_by": str(tv.approved_by) if tv.approved_by else None}
+
+    tv.approved_by = identity_id
+    if tv.state == "draft":
+        tv.state = "under_review"
+    tv.version_no += 1
+
+    after_state = {"state": tv.state, "approved_by": str(tv.approved_by)}
+
+    audit = AuditLog(
+        tenant_id=tenantId,
+        actor_identity_id=identity_id,
+        action="approve",
+        entity_type="exam_timetable_version",
+        entity_id=versionId,
+        before=before_state,
+        after=after_state,
+        at=datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    db.add(audit)
+    await db.commit()
+    return {"status": "success", "new_version_no": tv.version_no}
+
+
+@router.post("/timetables/{versionId}/publish")
+async def publish_exam_timetable(
+    tenantId: UUID,
+    versionId: UUID,
+    body: StateTransitionRequest,
+    db: AsyncSession = Depends(set_tenant_context),
+    identity_id: UUID = Depends(verify_jwt),
+    _: None = Depends(require_role(["institution_admin"])),
+):
+    from app.models.exam_timetable_version import ExamTimetableVersion
+    from app.models.stubs import AuditLog
+    from app.models.exam_session import ExamSession
+    from app.models.published_schedule import PublishedSchedule
+    from app.models.staff_profile import StaffProfile
+    from app.models.identity import Identity
+    from app.models.course import Course
+    from app.models.cohort import Cohort
+    from app.models.room import Room
+
+    result = await db.execute(select(ExamTimetableVersion).where(ExamTimetableVersion.id == versionId))
+    tv = result.scalar_one_or_none()
+    if not tv:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Exam timetable version not found"}})
+    
+    if tv.version_no != body.version_no:
+        raise HTTPException(status_code=409, detail={"error": {"code": "CONFLICT", "message": f"Stale version_no. DB has {tv.version_no}"}})
+
+    if tv.approved_by is None:
+        raise HTTPException(status_code=400, detail={"error": {"code": "VALIDATION_ERROR", "message": "Must be approved before publish"}})
+
+    before_state = {"state": tv.state}
+    tv.state = "published"
+    tv.version_no += 1
+    after_state = {"state": tv.state}
+
+    audit = AuditLog(
+        tenant_id=tenantId,
+        actor_identity_id=identity_id,
+        action="publish",
+        entity_type="exam_timetable_version",
+        entity_id=versionId,
+        before=before_state,
+        after=after_state,
+        at=datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    db.add(audit)
+    
+    # Denormalize
+    await db.execute(
+        PublishedSchedule.__table__.delete().where(PublishedSchedule.exam_timetable_version_id == versionId)
+    )
+
+    assignments_query = await db.execute(
+        select(ExamSession).where(ExamSession.exam_timetable_version_id == versionId)
+    )
+    assignments = assignments_query.scalars().all()
+
+    for assign in assignments:
+        staff_name = None
+        if assign.invigilator_staff_profile_id:
+            staff_q = await db.execute(
+                select(Identity.full_name).join(StaffProfile, Identity.id == StaffProfile.identity_id)
+                .where(StaffProfile.id == assign.invigilator_staff_profile_id)
+            )
+            staff_name = staff_q.scalar_one_or_none()
+
+        course_q = await db.execute(select(Course.name).where(Course.id == assign.course_id))
+        course_name = course_q.scalar_one_or_none()
+
+        cohort_q = await db.execute(select(Cohort.name).where(Cohort.id == assign.cohort_id))
+        cohort_name = cohort_q.scalar_one_or_none()
+
+        room_q = await db.execute(select(Room.name).where(Room.id == assign.room_id))
+        room_name = room_q.scalar_one_or_none()
+
+        published_row = PublishedSchedule(
+            tenant_id=tenantId,
+            exam_timetable_version_id=versionId,
+            type='exam',
+            staff_profile_id=assign.invigilator_staff_profile_id,
+            cohort_id=assign.cohort_id,
+            course_id=assign.course_id,
+            room_id=assign.room_id,
+            staff_name=staff_name,
+            cohort_name=cohort_name,
+            course_name=course_name,
+            room_name=room_name,
+            slot_index=assign.slot_start,
+            slot_span=1
+        )
+        db.add(published_row)
+
+    await db.commit()
+    return {"status": "success", "new_version_no": tv.version_no}

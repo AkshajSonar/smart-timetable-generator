@@ -40,7 +40,32 @@ Section numbers below (e.g. "§10.1") refer to `docs/PROJECT_SPEC.md`.
   the same PR.
 
 ---
+### 0.1 Agent Execution Protocol — Mandatory
 
+The agent must work in small, independently verifiable checkpoints.
+
+For every implementation task:
+
+1. Identify the smallest meaningful checkpoint that can be completed independently.
+2. Implement only that checkpoint.
+3. Run the relevant tests, type checks, linting, build checks, or other verification required for that checkpoint.
+4. Inspect `git status` and `git diff`.
+5. If verification passes, immediately create a focused Git commit for that checkpoint.
+6. Verify the commit with `git status` and `git log -1 --oneline`.
+7. Only then continue to the next checkpoint.
+
+**Do not accumulate multiple completed checkpoints in an uncommitted working tree.**
+
+A checkpoint should represent one coherent piece of functionality, infrastructure, correctness, testing, configuration, or documentation. Do not create meaningless commits for trivial intermediate edits.
+
+The required workflow is:
+
+`Plan → Implement → Test → Review diff → Commit → Verify commit → Continue`
+
+If a checkpoint's required tests fail, do not commit it as complete. Fix the failure, re-run verification, and commit only after the checkpoint is valid.
+
+Before switching to an unrelated workstream, commit the completed work first.
+---
 ## 1. Project Snapshot
 
 **Problem statement (PS1):** *"Smart Timetable Generator — develop an
@@ -446,6 +471,12 @@ each has a direct, greppable link to its test in
   required field, one `external_id` column used in row-level error
   messages.
 
+---
+
+## 11. Code Editing Rules (§17)
+- **Surgical edits over full-file rewrites:** Always prefer small, targeted updates (e.g., using search/replace tools for specific chunks) over replacing the entire content of an existing file.
+- **Diff before commit:** If a full-file rewrite is completely unavoidable, you MUST diff the new file against the prior version before committing to explicitly confirm that nothing (especially untouched imports or helper functions) was unintentionally dropped.
+
 ### Core endpoints (spec §18, condensed)
 
 | Method & path | Purpose |
@@ -500,6 +531,10 @@ in `services/api/app/rbac/`), not ad hoc per-router checks.
 
 *(TODO #2: Individualized faculty schedule view — `GET /timetables/{id}` is currently restricted to `institution_admin`, `department_head`, `reviewer` per §11 "view all schedules/reports". Faculty should eventually have a read-only view of their own assigned slots (mirrors `GET /students/{id}/timetable`). This is tracked debt; implement as a separate endpoint or a role-scoped filter on the existing one. See PROJECT_SPEC.md §32 #23.)*
 
+*(TODO #3: Schema-per-tenant isolation — §15.1 calls for dynamic schema creation and schema-scoped migrations when `tenant.isolation_mode = 'schema'`. This is tracked debt. The column is stored but the system universally enforces Row-Level Security via Postgres `current_setting` as the active mechanism for all tiers. See PROJECT_SPEC.md §32 #25.)*
+
+*(TODO #4: Frontend read-paths currently query raw `Assignment` and `ExamSession` tables, bypassing the CQRS read models. The frontend needs to be repointed to the denormalized `PublishedSchedule` table, which may require adding new read endpoints like `GET /published-schedules`. See PROJECT_SPEC.md §32 #24.)*
+
 ---
 
 ## 12. Natural-Language Rule Builder Pipeline (spec §20)
@@ -525,6 +560,12 @@ Build exactly this sequence — it's the whole reason invariant #5/#6 exist:
 6. At generation time, every `constraint_rule` row — regardless of source —
    compiles into the CP-SAT model identically. The solver never
    distinguishes how a rule was authored.
+
+### Step 1 Design Resolutions
+- **H8 Override Behavior:** When a `max_periods_per_day` or `max_periods_per_week` rule is scoped to a specific faculty (`target_id` = that `staff_profile`), it OVERRIDES that faculty's `workload_cap_day` / `workload_cap_week` column for H8 purposes during solver compilation.
+- **S9 Override Behavior:** When an `exam_min_gap_days` rule is confirmed, it OVERRIDES the hardcoded placeholder default weight for S9. If `constraint_rule.weight` is NULL, it falls back to the existing default (50).
+- **elective_no_overlap_core Rationale:** While H11 hard-guarantees no double-booking for an *enrolled* student, `elective_no_overlap_core` scoped to a cohort operates as an explicit soft priority (penalty) during scheduling. It nudges the solver to place electives at entirely different times than the core subjects of that cohort, giving students the maximum possible conflict-free elective options before enrollments are locked. The default weight is 30, overridable via `constraint_rule.weight`.
+- **NULL Weight Fallback:** If a soft constraint rule's `weight` column is explicitly NULL, the `compile_constraint_rules` function MUST treat it as "use the default weight" for that rule type (as defined in `DEFAULT_WEIGHTS`), rather than `weight = 0` (which would silently disable the constraint) or throwing a compile-time error. This applies uniformly to every S1-S9-mapped `rule_type`.
 
 ### `rule_type` enum (spec §30 — closed list, nothing else is valid)
 
@@ -636,6 +677,11 @@ electives/exams, rather than writing a new one per phase.
 - Migrations via Alembic; every migration that adds a tenant-scoped table
   also adds its RLS policy in the same migration, not a follow-up.
 - RBAC checks read from the single §27-matrix module (§11 above).
+- **Postgres RLS and Session Context**: Postgres reverts `set_config` GUC
+  variables (like `app.tenant_id`) at transaction end. Always call
+  `await db.flush()` to send changes to the database, followed by
+  `await db.refresh(instance)`, and strictly call `await db.commit()`
+  *last* to prevent RLS context from clearing before the row is refreshed.
 
 **Solver (OR-Tools CP-SAT):**
 - One function per H-code in `model.py` (see §9.3's implementation
@@ -665,21 +711,198 @@ electives/exams, rather than writing a new one per phase.
   requirement, §20 step 5).
 
 ---
-
 ## 17. Git / PR Workflow
 
-- Branch naming: `phase-<n>/<short-description>`, matching the §13 phase
-  table (e.g. `phase-1/master-data-solver-core`).
-- A PR touching the solver includes the relevant `solver/tests/constraints/`
-  results in the description — cite which H-codes are affected.
-- A PR touching `constraint_rule` or the rule parser confirms invariants
-  #5/#6/#8 weren't violated (no auto-apply, template-rendered confirmation,
-  enum-restricted `rule_type`).
-- Don't merge a phase's branch until its §14 Definition-of-Done tests are
-  green.
+Git history is part of the engineering workflow, not an afterthought. The agent MUST maintain small, meaningful, recoverable commits throughout implementation.
+
+### 17.1 Branching
+
+* Branch naming: `phase-<n>/<short-description>`, matching the §13 phase table.
+* Never implement directly on `main` unless explicitly instructed.
+* Keep each phase/workstream isolated to its own branch where practical.
+
+### 17.2 Mandatory Checkpoint Commits
+
+The agent MUST commit after every meaningful implementation checkpoint.
+
+A checkpoint is reached when one coherent unit of work is complete and verified. Examples:
+
+* project/scaffolding setup completed
+* database schema/models for one entity group completed
+* migration created and successfully applied
+* one API resource CRUD completed and tested
+* authentication/RBAC slice completed and verified
+* one solver constraint H-code implemented + its tests pass
+* one conflict-checker constraint implemented + its tests pass
+* one frontend feature/screen completed and verified
+* one API ↔ frontend integration completed
+* one bug fixed with a regression test
+* one phase milestone or independently testable vertical slice completed
+* documentation/configuration updated as part of a completed decision
+
+**Do NOT wait until an entire phase is complete before committing.**
+
+Conversely, do NOT create meaningless commits for every tiny edit such as changing one variable, renaming a local variable, or making intermediate edits that are not independently useful.
+
+### 17.3 Required Commit Loop
+
+After completing each checkpoint, follow this exact sequence:
+
+1. Inspect the working tree with `git status`.
+2. Inspect the changes with `git diff`.
+3. Run the tests/checks relevant to the checkpoint.
+4. Fix any failures before committing.
+5. Review the final diff again.
+6. Create a focused commit containing only the completed checkpoint.
+7. Verify the commit succeeded with `git status` and `git log -1`.
+8. Continue to the next checkpoint.
+
+The agent MUST NOT continue accumulating unrelated completed work after reaching a commit-worthy checkpoint.
+
+### 17.4 Commit Size
+
+Prefer small, cohesive commits over large milestone dumps.
+
+A commit should answer:
+
+> "What single piece of functionality, infrastructure, correctness, or documentation became complete in this commit?"
+
+Avoid commits such as:
+
+* `implement phase 1`
+* `lots of backend work`
+* `final changes`
+* `updates`
+* `misc fixes`
+
+when they contain multiple unrelated pieces of work.
+
+If multiple files are required to complete one coherent feature, they SHOULD be committed together. File count alone is not a reason to split a commit.
+
+### 17.5 Commit Message Format
+
+Use conventional, descriptive commit messages:
+
+`<type>(<scope>): <short description>`
+
+Allowed types:
+
+* `feat` — new functionality
+* `fix` — bug fix
+* `test` — tests without production behavior changes
+* `refactor` — behavior-preserving restructuring
+* `perf` — performance improvement
+* `docs` — documentation
+* `chore` — tooling/configuration/dependency work
+* `ci` — CI/CD changes
+
+Examples:
+
+* `feat(api): add tenant CRUD endpoints`
+* `feat(solver): implement H1 faculty collision constraint`
+* `test(solver): add H1 satisfaction and infeasibility cases`
+* `feat(auth): add tenant-scoped RBAC dependency`
+* `fix(db): preserve tenant context during transaction refresh`
+* `feat(web): add timetable generation review grid`
+
+For solver constraints, include the H-code whenever applicable.
+
+### 17.6 Test-to-Commit Rule
+
+A checkpoint that has a defined automated test MUST NOT be committed as complete while that test is failing.
+
+For example:
+
+> Implement H1 → add H1 tests → run tests → all H1 tests pass → commit.
+
+Do not implement H1–H9 and then make one large commit after all constraints are finished. Prefer one or a small number of commits corresponding to independently completed constraints or coherent solver slices.
+
+### 17.7 Bug-Fix Rule
+
+Every non-trivial bug fix SHOULD include a regression test when practical.
+
+Preferred workflow:
+
+`reproduce → add regression test → fix → verify → commit`
+
+Example:
+
+`fix(rules): reject unsupported rule types`
+
+with a corresponding test proving that an unsupported rule type cannot be persisted.
+
+### 17.8 Checkpoint Recovery
+
+Commits should leave the repository in a recoverable state.
+
+A future agent should be able to:
+
+* inspect the commit history,
+* understand what has already been completed,
+* run the relevant tests,
+* continue from the latest successful checkpoint,
+* and revert a problematic checkpoint without losing unrelated work.
+
+Do not leave large amounts of completed-but-uncommitted work in the working tree.
+
+### 17.9 Push / GitHub Synchronization
+
+When GitHub MCP or equivalent Git tooling is available:
+
+* Push completed checkpoint commits to the active remote branch periodically.
+* At minimum, push after a significant vertical slice and before moving into a risky or substantially different implementation area.
+* Before opening/updating a PR, ensure the branch is clean and all intended checkpoint commits are present on the remote.
+* Do not force-push or rewrite shared history unless explicitly instructed.
+
+If the environment does not permit pushing, still create the local checkpoint commits.
+
+### 17.10 Phase Completion
+
+A phase is not complete merely because its implementation exists.
+
+Before declaring a phase complete:
+
+1. Run the phase's Definition-of-Done tests from §14.
+2. Inspect `git status` and confirm there is no unintended uncommitted work.
+3. Review the phase's commit history.
+4. Ensure each major checkpoint is represented by a focused commit.
+5. Push the branch when GitHub access is available.
+6. Only then prepare/update the PR.
+
+A PR touching the solver includes the relevant `solver/tests/constraints/` results in the description and identifies the affected H-codes.
+
+A PR touching `constraint_rule` or the rule parser confirms invariants #5/#6/#8 were not violated.
+
+Don't merge a phase's branch until its §14 Definition-of-Done tests are green.
+
+### 17.11 Commit Before Context Switching
+
+Before switching from one major workstream to another, the agent SHOULD commit the completed work.
+
+For example:
+
+`database schema → commit → API implementation → commit → solver constraint → commit → frontend integration → commit`
+
+Do not leave completed backend, solver, and frontend work mixed together in one uncommitted working tree unless they are genuinely one atomic feature.
+
+### 17.12 Documentation Synchronization
+
+When an implementation decision resolves an item listed under §19, update this `AGENTS.md` in the same checkpoint or immediately adjacent documentation commit.
+
+The commit should clearly identify the decision, for example:
+
+`docs(infra): lock LLM provider decision`
+
+### 17.13 Git Safety Rules
+
+* Never commit `.env`, API keys, credentials, tokens, private keys, or other secrets.
+* Respect `.gitignore`.
+* Never use `git reset --hard`, `git clean -fd`, force-push, or history-rewriting commands to discard work unless explicitly instructed.
+* Before destructive Git operations, stop and ask the developer.
+* Do not amend an existing commit unless explicitly instructed or unless the commit has not been shared and the correction is clearly part of the same immediate checkpoint.
+* Prefer adding a corrective commit over rewriting history.
 
 ---
-
 ## 18. MCP Servers — when to use each
 
 These are available for this build; use them the way a developer would

@@ -23,6 +23,7 @@ from app.models.enrollment_record import EnrollmentRecord  # noqa: F401
 from app.models.batch_membership import BatchMembership  # noqa: F401
 from app.models.exam_timetable_version import ExamTimetableVersion  # noqa: F401
 from app.models.exam_session import ExamSession  # noqa: F401
+from app.models.published_schedule import PublishedSchedule  # noqa: F401
 from app.models.stubs import (  # noqa: F401
     ExceptionCalendar,
     SubstitutionLog,

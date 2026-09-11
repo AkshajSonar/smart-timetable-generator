@@ -9,7 +9,7 @@ from app.models.staff_profile import StaffProfile
 from app.models.tenant import Tenant
 from pydantic import BaseModel
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1", tags=["users"])
 
 class TenantRead(BaseModel):
     id: UUID
@@ -18,10 +18,12 @@ class TenantRead(BaseModel):
 class MeTenantsResponse(BaseModel):
     tenants: list[TenantRead]
 
+from app.core.database import get_db, get_db_superuser
+
 @router.get("/me/tenants", response_model=MeTenantsResponse)
 async def get_me_tenants(
     identity_id: UUID = Depends(verify_jwt),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db_superuser)
 ):
     """
     Lists every tenant the current Identity holds a staff_profile at.

@@ -15,7 +15,13 @@ from app.models.staff_profile import StaffProfile
 from app.models.timetable_version import TimetableVersion
 from app.schemas.report import LoadVerificationReport, LoadVerificationItem
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/reports", tags=["reports"])
+from app.rbac.dependencies import require_role
+
+router = APIRouter(
+    prefix="/api/v1/tenants/{tenantId}/reports",
+    tags=["reports"],
+    dependencies=[Depends(require_role(["institution_admin", "department_head", "reviewer"]))]
+)
 
 
 @router.get("/verification", response_model=LoadVerificationReport)

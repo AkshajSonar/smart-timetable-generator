@@ -12,6 +12,7 @@ def add_s9_exam_spread(
     model: cp_model.CpModel,
     exam_assign: dict,
     inp: SolverInput,
+    compiled: 'CompiledRules',
 ):
     """S9 (exam): Spread a student's exams evenly; minimize consecutive-day exams."""
     # For each student, if they have an exam on day D and day D+1, penalize.
@@ -23,20 +24,18 @@ def add_s9_exam_spread(
     # we can create a boolean variable for each student and day: student_day[student, day]
     
     penalties = []
+    exam_assign_map = {}
+    for (ev, iv, sv), v in exam_assign.items():
+        exam_assign_map.setdefault((ev, sv), []).append(v)
 
     for student in inp.students_exams:
         student_days = []
         for day, slots in inp.slots_per_day.items():
-            # Does student have an exam on this day?
-            # It's true if sum of their exam_assign vars for these slots > 0.
-            # But we can just use a boolean: b = model.NewBoolVar(...)
-            # model.AddMaxEquality(b, [v for e in student.exam_session_ids for s in slots for (ev, i, sv), v in exam_assign.items() if ev == e and sv == s])
-            
             day_vars = []
             for e in student.exam_session_ids:
                 for s in slots:
-                    # Collect all invigilator combinations for this exam session and slot
-                    day_vars.extend([v for (ev, iv, sv), v in exam_assign.items() if ev == e and sv == s])
+                    if (e, s) in exam_assign_map:
+                        day_vars.extend(exam_assign_map[(e, s)])
             
             if day_vars:
                 has_exam_day = model.NewBoolVar(f"s9_{student.id}_day_{day}")
@@ -61,10 +60,53 @@ def add_s9_exam_spread(
                 penalties.append(consecutive)
                 
     if penalties:
-        # We add this to the model's objective.
-        # Since this is a penalty, we minimize it.
-        # Check if the model already has an objective? CP-SAT model.Minimize() overwrites the objective.
-        # Currently we only have this one soft constraint.
-        # But we can maintain an objective expression.
-        # Actually, model.Minimize(sum(penalties) * weight) works.
-        model.Minimize(sum(penalties) * S9_CONSECUTIVE_DAY_PENALTY_WEIGHT)
+        weight = compiled.s9_exam_weight if compiled.s9_exam_weight is not None else S9_CONSECUTIVE_DAY_PENALTY_WEIGHT
+        return sum(penalties) * weight
+    return None
+
+def add_elective_no_overlap_core_penalty(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+    compiled: 'CompiledRules',
+):
+    """elective_no_overlap_core: Soft penalty for elective courses overlapping with core courses of the same cohort."""
+    # The default weight is 30 unless overridden.
+    weight = compiled.elective_no_overlap_core_weight if compiled.elective_no_overlap_core_weight is not None else 30
+    
+    penalties = []
+    
+    # Identify electives and core courses
+    courses_by_id = {c.id: c for c in inp.courses}
+    
+    elective_vars_map = {}
+    core_vars_map = {}
+    
+    for (fv, c, k, b, r, sv), v in assign.items():
+        course_type = courses_by_id[c].type
+        if course_type == "elective":
+            elective_vars_map.setdefault((k, sv), []).append(v)
+        elif course_type == "core":
+            core_vars_map.setdefault((k, sv), []).append(v)
+            
+    for (k, sv), elective_vars in elective_vars_map.items():
+        if (k, sv) in core_vars_map:
+            core_vars = core_vars_map[(k, sv)]
+            
+            # has_elective is true if any elective var is true
+            has_elective = model.NewBoolVar(f"has_elective_{k}_{sv}")
+            model.AddMaxEquality(has_elective, elective_vars)
+            
+            # has_core is true if any core var is true
+            has_core = model.NewBoolVar(f"has_core_{k}_{sv}")
+            model.AddMaxEquality(has_core, core_vars)
+            
+            # overlap is true if both are true
+            overlap = model.NewBoolVar(f"overlap_{k}_{sv}")
+            model.Add(has_elective + has_core - 1 <= overlap)
+            penalties.append(overlap)
+                
+    if penalties:
+        return sum(penalties) * weight
+    return None
+

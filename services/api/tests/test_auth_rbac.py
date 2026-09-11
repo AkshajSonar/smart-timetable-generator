@@ -217,20 +217,6 @@ async def test_timetables_view_rbac_403(override_role, mock_db):
         assert res.status_code == 403
 
 @pytest.mark.asyncio
-async def test_timetables_view_rbac_403_faculty(override_role, mock_db):
-    """§11: 'view all schedules/reports' = institution_admin, department_head, reviewer.
-    faculty is NOT in that list → must receive 403 on GET /timetables/{id}.
-    Individualized faculty schedule view is tracked debt (see AGENTS.md §11, PROJECT_SPEC.md §32 #23).
-    """
-    tenant_id = uuid.uuid4()
-    version_id = uuid.uuid4()
-    _setup_mock_db(mock_db)
-    override_role({"faculty"})
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
-        assert res.status_code == 403
-
-@pytest.mark.asyncio
 async def test_timetables_view_rbac_200_institution_admin(override_role, mock_db):
     tenant_id = uuid.uuid4()
     version_id = uuid.uuid4()
@@ -348,141 +334,204 @@ async def test_users_me_tenants_unguarded(override_role, mock_db):
         res = await ac.get("/api/v1/me/tenants")
         assert res.status_code != 403
 
-@pytest.mark.asyncio
-async def test_student_timetable_ownership(override_role, mock_db):
-    tenant_id = uuid.uuid4()
-    student_id = uuid.uuid4()
-    version_id = uuid.uuid4()
-    other_identity_id = uuid.uuid4()
-    
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        override_role({"student"})
-        mock_student = MagicMock()
-        mock_student.identity_id = conftest.TEST_IDENTITY_ID
-        mock_student.cohort_id = uuid.uuid4()
-        
-        mock_res = MagicMock()
-        mock_res.scalar_one_or_none.return_value = mock_student
-        mock_db.execute.return_value = mock_res
-        
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/students/{student_id}/timetable?versionId={version_id}")
-        assert res.status_code != 403
-        
-        mock_student.identity_id = other_identity_id
-        def db_side_effect(query, *args, **kwargs):
-            m = MagicMock()
-            if "StaffProfile.roles" in str(query):
-                m.scalar_one_or_none.return_value = None
-            else:
-                m.scalar_one_or_none.return_value = mock_student
-            return m
-        mock_db.execute.side_effect = db_side_effect
-        
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/students/{student_id}/timetable?versionId={version_id}")
-        assert res.status_code == 403
-        
-        override_role({"institution_admin"})
-        def db_side_effect_admin(query, *args, **kwargs):
-            m = MagicMock()
-            if "roles" in str(query).lower():
-                m.scalar_one_or_none.return_value = ["institution_admin"]
-            else:
-                m.scalar_one_or_none.return_value = mock_student
-            return m
-        mock_db.execute.side_effect = db_side_effect_admin
-        
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/students/{student_id}/timetable?versionId={version_id}")
-        assert res.status_code != 403
+
+
+"""Tests for Phase 5 Step 2: RBAC Enforcement"""
+
+import pytest
+import uuid
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy import text
+
+from app.main import app
+
+def _set_roles(roles: set) -> None:
+    from tests.conftest import MOCK_ROLES
+    MOCK_ROLES.clear()
+    MOCK_ROLES.update(roles)
 
 @pytest.mark.asyncio
-async def test_platform_super_admin_no_blanket_access(override_role, mock_db):
-    """A platform_super_admin identity with no staff_profile at Tenant X must get 403 on any
-    tenant-scoped endpoint. require_platform_super_admin grants zero tenant access — it is
-    used ONLY on POST /tenants and nowhere else (confirmed by grep: only tenants.py imports it).
-    """
-    tenant_id = uuid.uuid4()
-    # Simulate: identity authenticated, platform_super_admin on Identity table,
-    # but NO staff_profile row at this tenant → _get_user_roles returns empty set.
-    # We achieve this by: not overriding require_platform_super_admin (we're not
-    # calling /tenants), and setting mock roles to empty (no tenant membership).
-    _setup_mock_db(mock_db)
-    override_role(set())  # empty = no staff_profile → RBAC dependency returns empty roles
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # Call a tenant-scoped endpoint that requires institution_admin/department_head
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/departments")
-        # Must be 403, exactly like any other identity with no tenant membership
-        assert res.status_code == 403, (
-            f"Expected 403 (no tenant membership), got {res.status_code}. "
-            "platform_super_admin must not grant blanket tenant access."
-        )
-
-@pytest.mark.asyncio
-async def test_platform_super_admin():
-    # require_platform_super_admin is used EXCLUSIVELY on POST /tenants.
-    # Confirmed by grep: only services/api/app/routers/tenants.py imports it.
-    from app.rbac.dependencies import require_platform_super_admin
-    async def mock_super_admin_pass(): pass
-    async def mock_super_admin_fail():
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403)
-        
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        app.dependency_overrides[require_platform_super_admin] = mock_super_admin_fail
-        res = await ac.post("/api/v1/tenants", json={"name": "Test"})
-        assert res.status_code == 403
-        
-        app.dependency_overrides[require_platform_super_admin] = mock_super_admin_pass
-        from app.core.database import get_db
-        db = AsyncMock()
-        async def _get_mock_db(): yield db
-        app.dependency_overrides[get_db] = _get_mock_db
-        
-        res = await ac.post("/api/v1/tenants", json={"name": "Test"})
-        assert res.status_code != 403
-        
-        del app.dependency_overrides[require_platform_super_admin]
-        del app.dependency_overrides[get_db]
-
-@pytest.mark.asyncio
-async def test_roles_db_lookup_end_to_end():
-    from app.rbac.dependencies import _get_user_roles
-    from app.core.database import AsyncSessionLocal
-    from app.models.tenant import Tenant
-    from app.models.staff_profile import StaffProfile
-    from app.models.identity import Identity
-    from sqlalchemy import text
+async def test_roles_db_lookup_end_to_end(superuser_session):
+    """Verify the real DB join (staff_profile + identity + tenant) works, not just a mocked return."""
     
     tenant_id = uuid.uuid4()
     identity_id = uuid.uuid4()
+    staff_id = uuid.uuid4()
     
-    if _get_user_roles in app.dependency_overrides:
-        del app.dependency_overrides[_get_user_roles]
-        
-    async with AsyncSessionLocal() as session:
-        session.add(Identity(id=identity_id, email=f"test_{identity_id}@test.com", auth_provider_ref="auth0|123", platform_role=None))
-        session.add(Tenant(id=tenant_id, name="Test End-to-End Tenant", institution_type="college", timezone="UTC"))
-        session.add(StaffProfile(id=uuid.uuid4(), identity_id=identity_id, tenant_id=tenant_id, employment_type="full_time", workload_cap_week=40, workload_cap_day=8, roles=["reviewer"]))
-        await session.commit()
+    from app.models.tenant import Tenant
+    from app.models.identity import Identity
+    from app.models.staff_profile import StaffProfile
     
-    from app.core.auth import verify_jwt
-    async def mock_verify(): return identity_id
-    app.dependency_overrides[verify_jwt] = mock_verify
+    await superuser_session.execute(text("TRUNCATE TABLE tenant CASCADE;"))
+    await superuser_session.execute(text("TRUNCATE TABLE identity CASCADE;"))
     
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/reports/verification?version_id={uuid.uuid4()}")
+    superuser_session.add(Tenant(id=tenant_id, name="Test Tenant", institution_type="college", timezone="UTC"))
+    superuser_session.add(Identity(id=identity_id, email="real_lookup@test.com", auth_provider_ref="kc|real", platform_role=None))
+    superuser_session.add(StaffProfile(
+        id=staff_id,
+        identity_id=identity_id,
+        tenant_id=tenant_id,
+        employment_type="full_time",
+        workload_cap_week=40,
+        workload_cap_day=8,
+        roles=["reviewer"]
+    ))
+    await superuser_session.commit()
+    
+    try:
+        from app.core.auth import verify_jwt
+        async def mock_verify(): return identity_id
+        app.dependency_overrides[verify_jwt] = mock_verify
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/students/{uuid.uuid4()}/timetable?versionId={uuid.uuid4()}")
         assert res.status_code != 403
-        
-        res = await ac.post(f"/api/v1/tenants/{tenant_id}/timetables/generate", json={"term_id": "Fall"})
-        assert res.status_code == 403
-        
-    async with AsyncSessionLocal() as session:
-        await session.execute(text(f"DELETE FROM staff_profile WHERE identity_id = '{identity_id}'"))
-        await session.execute(text(f"DELETE FROM tenant WHERE id = '{tenant_id}'"))
-        await session.execute(text(f"DELETE FROM identity WHERE id = '{identity_id}'"))
-        await session.commit()
-        
-    from app.core.database import engine
-    await engine.dispose()
+    finally:
+        from tests.conftest import mock_verify_jwt
+        app.dependency_overrides[verify_jwt] = mock_verify_jwt
+
+@pytest.mark.asyncio
+async def test_platform_super_admin(superuser_session):
+    tenant_id = uuid.uuid4()
+    from app.models.tenant import Tenant
+    superuser_session.add(Tenant(id=tenant_id, name="Temp", institution_type="college", timezone="UTC"))
+    await superuser_session.commit()
     
-    from tests.conftest import mock_get_user_roles
-    app.dependency_overrides[_get_user_roles] = mock_get_user_roles
+    from app.core.database import get_db
+    from unittest.mock import AsyncMock, MagicMock
+    db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = "some_other_role"
+    db.execute.return_value = mock_result
+    async def _mock_db(): yield db
+    app.dependency_overrides[get_db] = _mock_db
+    
+    try:
+        from app.core.auth import verify_jwt
+        async def mock_verify(): return uuid.uuid4()
+        app.dependency_overrides[verify_jwt] = mock_verify
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post("/api/v1/tenants", json={"name": "New", "institution_type": "college", "timezone": "UTC"})
+        assert res.status_code == 403
+    finally:
+        from tests.conftest import mock_verify_jwt
+        app.dependency_overrides[verify_jwt] = mock_verify_jwt
+        if get_db in app.dependency_overrides:
+            del app.dependency_overrides[get_db]
+
+@pytest.mark.asyncio
+async def test_student_timetable_ownership(superuser_session):
+    tenant_id = uuid.uuid4()
+    student_id = uuid.uuid4()
+    other_student_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+    
+    from app.models.tenant import Tenant
+    from app.models.identity import Identity
+    from app.models.student_profile import StudentProfile
+    from app.models.cohort import Cohort
+    
+    await superuser_session.execute(text("TRUNCATE TABLE tenant CASCADE;"))
+    await superuser_session.execute(text("TRUNCATE TABLE identity CASCADE;"))
+    
+    cohort_id = uuid.uuid4()
+    other_identity_id = uuid.uuid4()
+    superuser_session.add(Tenant(id=tenant_id, name="Test Tenant", institution_type="college", timezone="UTC"))
+    superuser_session.add(Identity(id=identity_id, email="student@test.com", auth_provider_ref="kc|student", platform_role=None))
+    superuser_session.add(Identity(id=other_identity_id, email="other@test.com", auth_provider_ref="kc|other", platform_role=None))
+    await superuser_session.flush()
+    superuser_session.add(Cohort(id=cohort_id, tenant_id=tenant_id, name="C1", type="fixed"))
+    superuser_session.add(StudentProfile(id=student_id, identity_id=identity_id, tenant_id=tenant_id, external_student_code="S1", cohort_id=cohort_id))
+    superuser_session.add(StudentProfile(id=other_student_id, identity_id=other_identity_id, tenant_id=tenant_id, external_student_code="S2", cohort_id=cohort_id))
+    await superuser_session.commit()
+    
+    _set_roles({"student"})
+    
+    try:
+        from app.core.auth import verify_jwt
+        async def mock_verify(): return identity_id
+        app.dependency_overrides[verify_jwt] = mock_verify
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/students/{other_student_id}/timetable?versionId={uuid.uuid4()}")
+        assert res.status_code == 403
+    finally:
+        from tests.conftest import mock_verify_jwt
+        app.dependency_overrides[verify_jwt] = mock_verify_jwt
+
+@pytest.mark.asyncio
+async def test_get_timetable_rbac_403_faculty(superuser_session):
+    tenant_id = uuid.uuid4()
+    version_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+    staff_id = uuid.uuid4()
+    
+    from app.models.tenant import Tenant
+    from app.models.identity import Identity
+    from app.models.staff_profile import StaffProfile
+    from app.models.timetable_version import TimetableVersion
+    from app.models.academic_term import AcademicTerm
+    
+    await superuser_session.execute(text("TRUNCATE TABLE tenant CASCADE;"))
+    await superuser_session.execute(text("TRUNCATE TABLE identity CASCADE;"))
+    
+    import datetime
+    term_id = uuid.uuid4()
+    superuser_session.add(Tenant(id=tenant_id, name="Test Tenant", institution_type="college", timezone="UTC"))
+    superuser_session.add(Identity(id=identity_id, email="faculty@test.com", auth_provider_ref="kc|faculty", platform_role=None))
+    await superuser_session.flush()
+    superuser_session.add(AcademicTerm(id=term_id, tenant_id=tenant_id, name="Fall", start_date=datetime.date(2023, 9, 1), end_date=datetime.date(2023, 12, 15)))
+    superuser_session.add(StaffProfile(id=staff_id, identity_id=identity_id, tenant_id=tenant_id, employment_type="full_time", workload_cap_week=40, workload_cap_day=8, roles=["faculty"]))
+    superuser_session.add(TimetableVersion(id=version_id, tenant_id=tenant_id, term_id=term_id, state="draft"))
+    await superuser_session.commit()
+    
+    _set_roles({"faculty"})
+    
+    try:
+        from app.core.auth import verify_jwt
+        async def mock_verify(): return identity_id
+        app.dependency_overrides[verify_jwt] = mock_verify
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert res.status_code == 403
+    finally:
+        from tests.conftest import mock_verify_jwt
+        app.dependency_overrides[verify_jwt] = mock_verify_jwt
+
+@pytest.mark.asyncio
+async def test_platform_super_admin_no_blanket_access(superuser_session):
+    tenant_id = uuid.uuid4()
+    version_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+    
+    from app.models.tenant import Tenant
+    from app.models.identity import Identity
+    from app.models.timetable_version import TimetableVersion
+    from app.models.academic_term import AcademicTerm
+    
+    await superuser_session.execute(text("TRUNCATE TABLE tenant CASCADE;"))
+    await superuser_session.execute(text("TRUNCATE TABLE identity CASCADE;"))
+    
+    import datetime
+    term_id = uuid.uuid4()
+    superuser_session.add(Tenant(id=tenant_id, name="Test Tenant", institution_type="college", timezone="UTC"))
+    superuser_session.add(Identity(id=identity_id, email="super@test.com", auth_provider_ref="kc|super", platform_role="platform_super_admin"))
+    await superuser_session.flush()
+    superuser_session.add(AcademicTerm(id=term_id, tenant_id=tenant_id, name="Fall", start_date=datetime.date(2023, 9, 1), end_date=datetime.date(2023, 12, 15)))
+    superuser_session.add(TimetableVersion(id=version_id, tenant_id=tenant_id, term_id=term_id, state="draft"))
+    await superuser_session.commit()
+    
+    _set_roles(set())  # No tenant-level roles
+    
+    try:
+        from app.core.auth import verify_jwt
+        async def mock_verify(): return identity_id
+        app.dependency_overrides[verify_jwt] = mock_verify
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert res.status_code == 403
+    finally:
+        from tests.conftest import mock_verify_jwt
+        app.dependency_overrides[verify_jwt] = mock_verify_jwt

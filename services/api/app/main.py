@@ -18,6 +18,8 @@ from app.routers import (
     students,
     exams,
     users,
+    substitutions,
+    rules,
 )
 
 app = FastAPI(
@@ -48,6 +50,9 @@ app.include_router(import_data.router)
 app.include_router(students.router)
 app.include_router(exams.router)
 app.include_router(users.router)
+app.include_router(substitutions.router)
+app.include_router(rules.router)
+
 
 
 @app.get("/health")

@@ -11,7 +11,10 @@ from app.models.department import Department
 from app.schemas.common import PaginatedResponse
 from app.schemas.department import DepartmentCreate, DepartmentRead, DepartmentUpdate
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/departments", tags=["departments"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/departments", tags=["departments"])
 
 
 @router.post("", response_model=DepartmentRead, status_code=201)

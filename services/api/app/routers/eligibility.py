@@ -10,7 +10,10 @@ from app.models.eligibility import Eligibility
 from app.schemas.common import PaginatedResponse
 from app.schemas.eligibility import EligibilityCreate, EligibilityRead
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/eligibility", tags=["eligibility"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/eligibility", tags=["eligibility"])
 
 
 @router.post("", response_model=EligibilityRead, status_code=201)

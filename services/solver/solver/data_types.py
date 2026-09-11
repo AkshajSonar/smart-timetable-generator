@@ -13,6 +13,19 @@ Phase 2 additions:
 """
 
 from dataclasses import dataclass, field
+from typing import Optional
+
+
+@dataclass
+class RuleData:
+    """A constraint_rule from the DB mapped for the solver."""
+    rule_type: str
+    scope: str
+    target_id: Optional[str]
+    threshold: Optional[float]
+    unit: Optional[str]
+    polarity: Optional[str]
+    weight: Optional[float]
 
 
 @dataclass
@@ -128,6 +141,8 @@ class SolverInput:
     is_exam: bool = False  # Phase 4: flag indicating if this is an exam generation run
     exam_sessions: list[ExamSessionData] = field(default_factory=list) # Phase 4: fixed exam sessions
     students_exams: list[StudentExamData] = field(default_factory=list) # Phase 4: student assignments to exam sessions
+    rules: list[RuleData] = field(default_factory=list)
+    locked_assignments: list['AssignmentResult'] = field(default_factory=list) # Assignments that must be pinned to their exact slot/room/faculty
 
 
 @dataclass

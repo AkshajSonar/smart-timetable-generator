@@ -14,6 +14,7 @@ class AssignmentRead(BaseModel):
     slot_start: int
     slot_span: int
     batch_id: Optional[UUID] = None
+    is_locked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -28,9 +29,38 @@ class TimetableRead(BaseModel):
 
 class GenerateRequest(BaseModel):
     term_id: Optional[UUID] = None
+    prior_version_id: Optional[UUID] = None  # To load is_locked assignments from
 
 
 class GenerateResponse(BaseModel):
     timetable_version_id: UUID
     status: str
     violations: list[dict] = []
+
+
+class EditAssignmentRequest(BaseModel):
+    """FR-9.1 manual edit request.
+
+    version_no: the version_no the client last read from the timetable_version row.
+    A mismatch with the DB's current version_no returns CONFLICT (invariant #7).
+
+    assignment_id: the specific assignment row to change.
+
+    Only the fields being changed need to be provided; omitted fields are unchanged.
+    At least one of staff_profile_id, room_id, slot_start must be non-None.
+    """
+    version_no: int
+    assignment_id: UUID
+    staff_profile_id: Optional[UUID] = None
+    room_id: Optional[UUID] = None
+    slot_start: Optional[int] = None
+
+
+class EditAssignmentResponse(BaseModel):
+    """Returned on a successful edit. version_no reflects the post-increment value."""
+    assignment_id: UUID
+    new_version_no: int
+    violations: list[dict] = []  # always empty on success (any violation rejects the write)
+
+class StateTransitionRequest(BaseModel):
+    version_no: int

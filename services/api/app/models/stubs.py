@@ -17,12 +17,22 @@ class ExceptionCalendar(Base, TenantMixin):
 
 
 class SubstitutionLog(Base, TenantMixin):
+    """§17 substitution_log + two-step flow extensions.
+
+    status lifecycle: suggested → confirmed | cancelled.
+    substitute_staff_profile_id is NULL at suggest time; set on confirm.
+    Persisting a row at suggest time gives the confirm endpoint a stable ID
+    and makes concurrent confirms detectable (second confirm sees status='confirmed' → 409).
+    """
     __tablename__ = "substitution_log"
     id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     original_staff_profile_id = Column(UUID(as_uuid=True), ForeignKey("staff_profile.id"), nullable=False)
-    substitute_staff_profile_id = Column(UUID(as_uuid=True), ForeignKey("staff_profile.id"), nullable=False)
+    # Nullable: set at confirm time only
+    substitute_staff_profile_id = Column(UUID(as_uuid=True), ForeignKey("staff_profile.id"), nullable=True)
     assignment_id = Column(UUID(as_uuid=True), ForeignKey("assignment.id"), nullable=False)
     date = Column(Date, nullable=False)
+    # §31 free choice: status enum guards against double-confirm races
+    status = Column(String, nullable=False, server_default="suggested")  # suggested|confirmed|cancelled
 
 
 class AuditLog(Base, TenantMixin):

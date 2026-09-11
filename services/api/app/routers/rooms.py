@@ -10,7 +10,10 @@ from app.models.room import Room
 from app.schemas.common import PaginatedResponse
 from app.schemas.room import RoomCreate, RoomRead, RoomUpdate
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/rooms", tags=["rooms"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/rooms", tags=["rooms"])
 
 
 @router.post("", response_model=RoomRead, status_code=201)

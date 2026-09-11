@@ -10,7 +10,10 @@ from app.models.elective_section import ElectiveSection
 from app.models.enrollment_record import EnrollmentRecord
 from app.schemas.import_data import EnrollmentImportRequest, ImportResult
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/import", tags=["import"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin"]))],
+    prefix="/api/v1/tenants/{tenantId}/import", tags=["import"])
 
 
 @router.post("/enrollment", response_model=ImportResult)

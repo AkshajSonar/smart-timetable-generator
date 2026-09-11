@@ -11,7 +11,10 @@ from app.models.course import Course
 from app.schemas.common import PaginatedResponse
 from app.schemas.course import CourseCreate, CourseRead, CourseUpdate
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/courses", tags=["courses"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/courses", tags=["courses"])
 
 
 @router.post("", response_model=CourseRead, status_code=201)

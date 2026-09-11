@@ -12,6 +12,9 @@ from app.models.assignment import Assignment
 from app.schemas.student import StudentRead
 from app.schemas.timetable import AssignmentRead
 from app.schemas.common import PaginatedResponse
+from app.core.auth import verify_jwt
+from app.models.staff_profile import StaffProfile
+from app.rbac.dependencies import require_role
 
 router = APIRouter(prefix="/api/v1/tenants/{tenantId}/students", tags=["students"])
 
@@ -20,6 +23,7 @@ router = APIRouter(prefix="/api/v1/tenants/{tenantId}/students", tags=["students
 async def list_students(
     tenantId: UUID,
     db: AsyncSession = Depends(set_tenant_context),
+    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer"]))
 ):
     result = await db.execute(select(StudentProfile))
     items = list(result.scalars().all())
@@ -35,12 +39,27 @@ async def get_student_timetable(
     studentId: UUID,
     versionId: UUID = Query(..., description="The timetable version ID to fetch assignments for"),
     db: AsyncSession = Depends(set_tenant_context),
+    identity_id: UUID = Depends(verify_jwt),
+    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer", "student"]))
 ):
     # Verify student exists
     student_result = await db.execute(select(StudentProfile).where(StudentProfile.id == studentId))
     student = student_result.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Student not found"}})
+
+    # Ownership check: if caller is a student (and not accessing their own profile), check if they have admin roles
+    if student.identity_id != identity_id:
+        staff_res = await db.execute(
+            select(StaffProfile.roles).where(
+                StaffProfile.identity_id == identity_id,
+                StaffProfile.tenant_id == tenantId
+            )
+        )
+        roles = staff_res.scalar_one_or_none() or []
+        allowed_admin = {"institution_admin", "department_head", "reviewer"}
+        if not allowed_admin.intersection(roles):
+            raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Cannot access another student's timetable"}})
 
     # Fetch student's specific batches
     bm_result = await db.execute(

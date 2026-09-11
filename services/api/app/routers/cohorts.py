@@ -10,7 +10,10 @@ from app.models.cohort import Cohort
 from app.schemas.common import PaginatedResponse
 from app.schemas.cohort import CohortCreate, CohortRead, CohortUpdate
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/cohorts", tags=["cohorts"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/cohorts", tags=["cohorts"])
 
 
 @router.post("", response_model=CohortRead, status_code=201)

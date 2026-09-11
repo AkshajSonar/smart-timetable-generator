@@ -18,6 +18,7 @@ created for slot indices present in the period_slots input.
 from ortools.sat.python import cp_model
 
 from solver.data_types import AssignmentResult, ExamSessionResult, SolverInput
+from solver.rule_compiler import compile_constraint_rules
 
 
 # ---------- Room-type matching for H9 (Phase 1 simplification) ----------
@@ -143,22 +144,26 @@ def build_h8_workload_cap(
     model: cp_model.CpModel,
     assign: dict,
     inp: SolverInput,
+    compiled: 'CompiledRules',
 ):
     """H8: per-week and per-day workload caps for each faculty."""
-    faculty_by_id = {f.id: f for f in inp.faculty}
-
     for f_data in inp.faculty:
         f = f_data.id
+        
+        # Override caps if a confirmed rule targets this faculty
+        cap_week = compiled.faculty_max_periods_week.get(f, f_data.workload_cap_week)
+        cap_day = compiled.faculty_max_periods_day.get(f, f_data.workload_cap_day)
+        
         # Weekly cap
         all_vars = [v for (fv, c, k, b, r, s), v in assign.items() if fv == f]
         if all_vars:
-            model.Add(sum(all_vars) <= f_data.workload_cap_week)
+            model.Add(sum(all_vars) <= cap_week)
 
         # Daily cap
         for day, day_slots in inp.slots_per_day.items():
             day_vars = [v for (fv, c, k, b, r, s), v in assign.items() if fv == f and s in day_slots]
             if day_vars:
-                model.Add(sum(day_vars) <= f_data.workload_cap_day)
+                model.Add(sum(day_vars) <= cap_day)
 
 
 def build_h9_room_type_match():
@@ -197,23 +202,19 @@ def build_h11_no_student_double_booking(
     Uses explicit batch membership logic: if a student is in Batch A for a course, they are only
     constrained against Batch A's assignments for that course, not Batch B's.
     """
+    assign_map = {}
+    for (fv, c, k, b, r, sv), v in assign.items():
+        assign_map.setdefault((c, k, b, sv), []).append(v)
+        
     for student in inp.students:
         for s in range(inp.num_slots):
-            # Gather all variables for this student's courses at this slot
             student_vars_at_slot = []
             for sc in student.courses:
-                # If they are in a specific batch for this course, match only that batch.
-                # If they are not in a batch (whole cohort course), match where b is None.
-                # Wait, what if the input just says batch_id is None, meaning it's a whole-cohort course?
-                # Then we match b == None. But what if there are no batches for that course at all?
-                # The decision variable has b=None. So matching sc.batch_id works.
-                vars_for_course = [
-                    v for (fv, c, k, b, r, sv), v in assign.items()
-                    if c == sc.course_id and k == sc.cohort_id and b == sc.batch_id and sv == s
-                ]
-                student_vars_at_slot.extend(vars_for_course)
+                key = (sc.course_id, sc.cohort_id, sc.batch_id, s)
+                if key in assign_map:
+                    student_vars_at_slot.extend(assign_map[key])
             
-            if student_vars_at_slot:
+            if len(student_vars_at_slot) > 1:
                 model.Add(sum(student_vars_at_slot) <= 1)
 
 
@@ -226,12 +227,17 @@ def build_h12_student_exam_overlap(
     inp: SolverInput,
 ):
     """H12: No student has two overlapping exam sessions."""
+    exam_assign_map = {}
+    for (e, i, sv), v in exam_assign.items():
+        exam_assign_map.setdefault((e, sv), []).append(v)
+        
     for student in inp.students_exams:
         for s in range(inp.num_slots):
-            vars_at_slot = [
-                v for (e, i, sv), v in exam_assign.items()
-                if sv == s and e in student.exam_session_ids
-            ]
+            vars_at_slot = []
+            for e in student.exam_session_ids:
+                if (e, s) in exam_assign_map:
+                    vars_at_slot.extend(exam_assign_map[(e, s)])
+                    
             if vars_at_slot:
                 model.Add(sum(vars_at_slot) <= 1)
 
@@ -247,18 +253,17 @@ def build_h13_exam_room_capacity(
     rooms_by_id = {r.id: r for r in inp.rooms}
     sessions_by_id = {s.id: s for s in inp.exam_sessions}
 
+    # Group vars by (room_id, slot)
+    room_slot_vars = {}
+    for (e, i, sv), v in exam_assign.items():
+        room_id = sessions_by_id[e].room_id
+        num_students = sessions_by_id[e].num_students
+        room_slot_vars.setdefault((room_id, sv), []).append(v * num_students)
+
     for r in inp.rooms:
         for s in range(inp.num_slots):
-            vars_in_room = [
-                v for (e, i, sv), v in exam_assign.items()
-                if sv == s and sessions_by_id[e].room_id == r.id
-            ]
-            if vars_in_room:
-                # Sum of (is_active * num_students) <= capacity
-                model.Add(
-                    sum(v * sessions_by_id[e].num_students for (e, i, sv), v in exam_assign.items() if sv == s and sessions_by_id[e].room_id == r.id)
-                    <= r.capacity
-                )
+            if (r.id, s) in room_slot_vars:
+                model.Add(sum(room_slot_vars[(r.id, s)]) <= r.capacity)
 
 
 def build_h14_invigilator_double_booking(
@@ -346,6 +351,8 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     faculty_ids = [f.id for f in inp.faculty]
     room_ids = [r.id for r in inp.rooms]
 
+    compiled = compile_constraint_rules(inp)
+
     build_h1_no_faculty_double_booking(model, assign, faculty_ids, inp.num_slots)
     build_h2_no_cohort_double_booking(model, assign, inp)
     build_h3_no_room_double_booking(model, assign, room_ids, inp.num_slots)
@@ -353,11 +360,28 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     build_h5_faculty_eligibility()  # by construction
     build_h6_hours_match_required(model, assign, inp)
     build_h7_valid_period_range()  # by construction
-    build_h8_workload_cap(model, assign, inp)
+    build_h8_workload_cap(model, assign, inp, compiled)
     build_h9_room_type_match()  # by construction
     build_h10_shared_lab_capacity(model, assign, inp)
     build_h11_no_student_double_booking(model, assign, inp)
 
+    # Enforce locked assignments (FR-9.2)
+    for locked in inp.locked_assignments:
+        key = (locked.faculty_id, locked.course_id, locked.cohort_id, locked.batch_id, locked.room_id, locked.slot_index)
+        if key in assign:
+            model.Add(assign[key] == 1)
+
+    # Soft constraints
+    import solver.objective as obj
+    penalties = []
+    
+    pen_overlap = obj.add_elective_no_overlap_core_penalty(model, assign, inp, compiled)
+    if pen_overlap is not None:
+        penalties.append(pen_overlap)
+        
+    if penalties:
+        model.Minimize(sum(penalties))
+    
     # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = timeout_seconds
@@ -408,16 +432,19 @@ def _solve_exams(inp: SolverInput, timeout_seconds: int) -> list[ExamSessionResu
     if not exam_assign:
         return None
 
-    faculty_ids = [f.id for f in inp.faculty]
+    compiled = compile_constraint_rules(inp)
 
-    # Apply Exam Hard Constraints
+    # 1. Hard Constraints
+    faculty_ids = [f.id for f in inp.faculty]
     build_h12_student_exam_overlap(model, exam_assign, inp)
     build_h13_exam_room_capacity(model, exam_assign, inp)
     build_h14_invigilator_double_booking(model, exam_assign, faculty_ids, inp)
 
-    # Apply S9 (Soft Objective)
-    from solver.objective import add_s9_exam_spread
-    add_s9_exam_spread(model, exam_assign, inp)
+    # 2. Soft Constraints (Objective)
+    import solver.objective as obj
+    penalty = obj.add_s9_exam_spread(model, exam_assign, inp, compiled)
+    if penalty is not None:
+        model.Minimize(penalty)
 
     # Solve
     solver = cp_model.CpSolver()

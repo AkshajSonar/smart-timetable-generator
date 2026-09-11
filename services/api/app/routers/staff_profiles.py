@@ -10,7 +10,10 @@ from app.models.staff_profile import StaffProfile
 from app.schemas.common import PaginatedResponse
 from app.schemas.staff_profile import StaffProfileCreate, StaffProfileRead, StaffProfileUpdate
 
-router = APIRouter(prefix="/api/v1/tenants/{tenantId}/staff-profiles", tags=["staff-profiles"])
+from app.rbac.dependencies import require_role
+router = APIRouter(
+    dependencies=[Depends(require_role(["institution_admin", "department_head"]))],
+    prefix="/api/v1/tenants/{tenantId}/staff-profiles", tags=["staff-profiles"])
 
 
 @router.post("", response_model=StaffProfileRead, status_code=201)
