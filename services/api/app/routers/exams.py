@@ -3,7 +3,7 @@
 from uuid import UUID, uuid4
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from app.models.student_profile import StudentProfile
 from app.models.enrollment_record import EnrollmentRecord
 from app.models.elective_section import ElectiveSection
 from app.schemas.exam import ExamGenerateRequest, ExamGenerateResponse, ExamSessionRead
+from app.schemas.timetable import PublishedScheduleResponse
 from app.schemas.timetable import StateTransitionRequest
 
 # Import solver
@@ -275,18 +276,24 @@ async def generate_exam_timetable(
     await db.commit()
     return ExamGenerateResponse(success=True, version_id=tv.id, sessions=sessions_out)
 
-@router.get("/sessions", response_model=list[ExamSessionRead])
+@router.get("/sessions", response_model=list[PublishedScheduleResponse])
 async def get_exam_sessions(
     tenantId: UUID,
+    versionId: UUID = Query(..., description="The exam timetable version ID to fetch sessions for"),
     db: AsyncSession = Depends(set_tenant_context),
-    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer"]))
+    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
 ):
     """
-    Get all exam sessions for the current tenant.
-    Restricted to 'view all schedules/reports' roles (institution_admin, department_head, reviewer).
+    Get all exam sessions for the given version.
     """
-    result = await db.execute(select(ExamSession))
-    return result.scalars().all()
+    from app.models.exam_timetable_version import ExamTimetableVersion
+    tv_result = await db.execute(select(ExamTimetableVersion).where(ExamTimetableVersion.id == versionId))
+    tv = tv_result.scalar_one_or_none()
+    if not tv:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Exam timetable version not found"}})
+        
+    from app.services.schedule_mapper import get_dual_routed_schedules
+    return await get_dual_routed_schedules(db, versionId, tv.state, 'exam')
 
 @router.post("/timetables/{versionId}/approve")
 async def approve_exam_timetable(

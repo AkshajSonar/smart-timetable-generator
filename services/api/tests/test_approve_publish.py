@@ -209,3 +209,133 @@ async def test_exams_approve_then_publish_success(superuser_session):
             select(PublishedSchedule).where(PublishedSchedule.exam_timetable_version_id == exam_version_id)
         )).scalars().all()
         assert isinstance(ps_rows, list)  # endpoint ran without error; 0 rows expected with no sessions
+
+@pytest.mark.asyncio
+async def test_dual_routing_identical_shape(superuser_session):
+    from app.models.assignment import Assignment
+    from app.models.staff_profile import StaffProfile
+    
+    tenant_id, term_id, version_id, _ = await _seed_test_data(superuser_session, conftest.TEST_IDENTITY_ID)
+    
+    sp_id = uuid.uuid4()
+    from app.models.department import Department
+    from app.models.course import Course
+    from app.models.cohort import Cohort
+    from app.models.campus import Campus
+    from app.models.room import Room
+    
+    dept_id = uuid.uuid4()
+    course_id = uuid.uuid4()
+    cohort_id = uuid.uuid4()
+    campus_id = uuid.uuid4()
+    room_id = uuid.uuid4()
+    
+    superuser_session.add(Department(id=dept_id, tenant_id=tenant_id, name="Test Dept"))
+    await superuser_session.flush()
+    superuser_session.add(Course(id=course_id, tenant_id=tenant_id, department_id=dept_id, name="Test Course", type="core", credit_value=3, hours_per_week=3))
+    superuser_session.add(Cohort(id=cohort_id, tenant_id=tenant_id, name="Test Cohort", type="fixed"))
+    superuser_session.add(Campus(id=campus_id, tenant_id=tenant_id, name="Test Campus", timezone="UTC"))
+    await superuser_session.flush()
+    superuser_session.add(Room(id=room_id, tenant_id=tenant_id, campus_id=campus_id, name="Test Room", type="lecture_hall", capacity=50, equipment_tags=[], accessible=True))
+    
+    superuser_session.add(StaffProfile(id=sp_id, tenant_id=tenant_id, identity_id=conftest.TEST_IDENTITY_ID, employment_type="full_time", workload_cap_week=10, workload_cap_day=2))
+    
+    await superuser_session.flush()
+    
+    a1_id = uuid.uuid4()
+    superuser_session.add(Assignment(id=a1_id, tenant_id=tenant_id, timetable_version_id=version_id, staff_profile_id=sp_id, course_id=course_id, cohort_id=cohort_id, room_id=room_id, slot_start=0, slot_span=1))
+    await superuser_session.commit()
+    
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        conftest.MOCK_ROLES = {"institution_admin", "reviewer"}
+        
+        # 1. Fetch as draft
+        res_draft = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert res_draft.status_code == 200
+        draft_schedules = res_draft.json()["schedules"]
+        assert len(draft_schedules) == 1
+        
+        # 2. Approve and publish
+        res_approve = await ac.post(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}/approve", json={"version_no": 1})
+        assert res_approve.status_code == 200
+        res_publish = await ac.post(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}/publish", json={"version_no": 2})
+        assert res_publish.status_code == 200
+        
+        # 3. Fetch as published
+        res_published = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert res_published.status_code == 200
+        published_schedules = res_published.json()["schedules"]
+        
+        # Assert shapes are identical except for ID
+        for d in draft_schedules:
+            d.pop("id", None)
+        for p in published_schedules:
+            p.pop("id", None)
+        assert draft_schedules == published_schedules
+
+@pytest.mark.asyncio
+async def test_behavioral_switch_draft_reads_live_published_reads_snapshot(superuser_session):
+    from app.models.assignment import Assignment
+    from app.models.staff_profile import StaffProfile
+    
+    tenant_id, term_id, version_id, _ = await _seed_test_data(superuser_session, conftest.TEST_IDENTITY_ID)
+    
+    sp_id = uuid.uuid4()
+    from app.models.department import Department
+    from app.models.course import Course
+    from app.models.cohort import Cohort
+    from app.models.campus import Campus
+    from app.models.room import Room
+    
+    dept_id = uuid.uuid4()
+    course_id = uuid.uuid4()
+    cohort_id = uuid.uuid4()
+    campus_id = uuid.uuid4()
+    room_id = uuid.uuid4()
+    
+    superuser_session.add(Department(id=dept_id, tenant_id=tenant_id, name="Test Dept"))
+    await superuser_session.flush()
+    superuser_session.add(Course(id=course_id, tenant_id=tenant_id, department_id=dept_id, name="Test Course", type="core", credit_value=3, hours_per_week=3))
+    superuser_session.add(Cohort(id=cohort_id, tenant_id=tenant_id, name="Test Cohort", type="fixed"))
+    superuser_session.add(Campus(id=campus_id, tenant_id=tenant_id, name="Test Campus", timezone="UTC"))
+    await superuser_session.flush()
+    superuser_session.add(Room(id=room_id, tenant_id=tenant_id, campus_id=campus_id, name="Test Room", type="lecture_hall", capacity=50, equipment_tags=[], accessible=True))
+    
+    superuser_session.add(StaffProfile(id=sp_id, tenant_id=tenant_id, identity_id=conftest.TEST_IDENTITY_ID, employment_type="full_time", workload_cap_week=10, workload_cap_day=2))
+    await superuser_session.flush()
+    
+    a1_id = uuid.uuid4()
+    superuser_session.add(Assignment(id=a1_id, tenant_id=tenant_id, timetable_version_id=version_id, staff_profile_id=sp_id, course_id=course_id, cohort_id=cohort_id, room_id=room_id, slot_start=0, slot_span=1))
+    await superuser_session.commit()
+    
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        conftest.MOCK_ROLES = {"institution_admin", "reviewer"}
+        
+        # Draft reads live
+        res1 = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert len(res1.json()["schedules"]) == 1
+        
+        # Add assignment to raw table
+        a2_id = uuid.uuid4()
+        superuser_session.add(Assignment(id=a2_id, tenant_id=tenant_id, timetable_version_id=version_id, staff_profile_id=sp_id, course_id=course_id, cohort_id=cohort_id, room_id=room_id, slot_start=1, slot_span=1))
+        await superuser_session.commit()
+        
+        res2 = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert len(res2.json()["schedules"]) == 2
+        
+        # Approve and publish
+        await ac.post(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}/approve", json={"version_no": 1})
+        await ac.post(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}/publish", json={"version_no": 2})
+        
+        # Fetch published
+        res3 = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert len(res3.json()["schedules"]) == 2
+        
+        # Add assignment 3 to raw table
+        a3_id = uuid.uuid4()
+        superuser_session.add(Assignment(id=a3_id, tenant_id=tenant_id, timetable_version_id=version_id, staff_profile_id=sp_id, course_id=course_id, cohort_id=cohort_id, room_id=room_id, slot_start=2, slot_span=1))
+        await superuser_session.commit()
+        
+        # Fetch published again - should STILL be 2, because it reads the snapshot
+        res4 = await ac.get(f"/api/v1/tenants/{tenant_id}/timetables/{version_id}")
+        assert len(res4.json()["schedules"]) == 2

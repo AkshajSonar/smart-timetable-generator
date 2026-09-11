@@ -18,13 +18,31 @@ class AssignmentRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class PublishedScheduleResponse(BaseModel):
+    id: UUID
+    type: str
+    staff_profile_id: Optional[UUID] = None
+    cohort_id: Optional[UUID] = None
+    course_id: Optional[UUID] = None
+    room_id: Optional[UUID] = None
+    batch_id: Optional[UUID] = None
+    staff_name: Optional[str] = None
+    cohort_name: Optional[str] = None
+    course_name: Optional[str] = None
+    room_name: Optional[str] = None
+    batch_name: Optional[str] = None
+    slot_index: int
+    slot_span: int
+    is_locked: bool = False
+
+    model_config = {"from_attributes": True}
 
 class TimetableRead(BaseModel):
     id: UUID
     tenant_id: UUID
     state: str
     version_no: int
-    assignments: list[AssignmentRead] = []
+    schedules: list[PublishedScheduleResponse] = []
 
 
 class GenerateRequest(BaseModel):

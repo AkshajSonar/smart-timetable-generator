@@ -18,12 +18,14 @@ class PublishedSchedule(Base, TenantMixin):
     cohort_id = Column(UUID(as_uuid=True), index=True, nullable=True)
     course_id = Column(UUID(as_uuid=True), index=True, nullable=True)
     room_id = Column(UUID(as_uuid=True), index=True, nullable=True)
+    batch_id = Column(UUID(as_uuid=True), index=True, nullable=True)
     
     # Denormalized string values for fast reading (CQRS read model)
     staff_name = Column(String, nullable=True)
     cohort_name = Column(String, nullable=True)
     course_name = Column(String, nullable=True)
     room_name = Column(String, nullable=True)
+    batch_name = Column(String, nullable=True)
     
     slot_index = Column(Integer, nullable=False)
     slot_span = Column(Integer, nullable=False, default=1)

@@ -346,28 +346,26 @@ async def generate_timetable(
 
 
 @router.get("/{versionId}", response_model=TimetableRead)
-async def get_timetable(
+async def get_timetable_version(
     tenantId: UUID,
     versionId: UUID,
     db: AsyncSession = Depends(set_tenant_context),
-    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer"])),
+    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
 ):
     tv_result = await db.execute(select(TimetableVersion).where(TimetableVersion.id == versionId))
     tv = tv_result.scalar_one_or_none()
     if not tv:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Timetable version not found"}})
 
-    assign_result = await db.execute(
-        select(Assignment).where(Assignment.timetable_version_id == versionId)
-    )
-    assignments = list(assign_result.scalars().all())
+    from app.services.schedule_mapper import get_dual_routed_schedules
+    schedules = await get_dual_routed_schedules(db, versionId, tv.state, 'class')
 
     return TimetableRead(
         id=tv.id,
         tenant_id=tv.tenant_id,
         state=tv.state,
         version_no=tv.version_no,
-        assignments=[AssignmentRead.model_validate(a) for a in assignments],
+        schedules=schedules,
     )
 
 
@@ -530,6 +528,12 @@ async def publish_timetable(
         room_q = await db.execute(select(Room.name).where(Room.id == assign.room_id))
         room_name = room_q.scalar_one_or_none()
 
+        batch_name = None
+        if assign.batch_id:
+            from app.models.batch import Batch
+            batch_q = await db.execute(select(Batch.label).where(Batch.id == assign.batch_id))
+            batch_name = batch_q.scalar_one_or_none()
+
         published_row = PublishedSchedule(
             tenant_id=tenantId,
             timetable_version_id=versionId,
@@ -538,10 +542,12 @@ async def publish_timetable(
             cohort_id=assign.cohort_id,
             course_id=assign.course_id,
             room_id=assign.room_id,
+            batch_id=assign.batch_id,
             staff_name=staff_name,
             cohort_name=cohort_name,
             course_name=course_name,
             room_name=room_name,
+            batch_name=batch_name,
             slot_index=assign.slot_start,
             slot_span=assign.slot_span
         )
