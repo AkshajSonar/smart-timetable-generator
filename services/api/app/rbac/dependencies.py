@@ -73,6 +73,7 @@ def require_role(allowed_roles: list[str]):
                 status_code=403,
                 detail={"error": {"code": "FORBIDDEN", "message": f"Requires one of roles: {allowed_roles}"}}
             )
+        return user_roles
             
     return role_checker
 

@@ -177,9 +177,19 @@ async def build_solver_input(
         if es:
             student_electives.setdefault(enr.student_profile_id, []).append(es.course_id)
 
+    # Index eligibilities by course_id to quickly find what cohort the solver used for each elective
+    elective_elig_cohort: dict[UUID, UUID] = {}  # course_id -> cohort_id used in eligibility (for electives)
+    for e in eligibilities:
+        c = courses.get(e.course_id)
+        if c and c.type == "elective":
+            # All eligibility records for an elective may share a single "representative" cohort_id
+            # (the one used when creating assign variables). Record the first encountered.
+            if e.course_id not in elective_elig_cohort and e.batch_id is None:
+                elective_elig_cohort[e.course_id] = e.cohort_id
+
     solver_students = []
     for s in db_students:
-        s_courses = []
+        s_courses_set = set()
         for e in eligibilities:
             if e.cohort_id != s.cohort_id:
                 continue
@@ -194,16 +204,21 @@ async def build_solver_input(
                 student_bms = student_batches.get(s.id, [])
                 for b in batches_for_course:
                     if b.id in student_bms:
-                        s_courses.append(StudentCourseData(course_id=str(course.id), cohort_id=str(s.cohort_id), batch_id=str(b.id)))
+                        s_courses_set.add((str(course.id), str(s.cohort_id), str(b.id)))
                         break
             else:
                 if course.type == "elective":
                     if course.id in student_electives.get(s.id, []):
-                        s_courses.append(StudentCourseData(course_id=str(course.id), cohort_id=str(s.cohort_id), batch_id=None))
+                        # Use the eligibility cohort_id (what assign vars were built with),
+                        # not the student's home cohort — they differ for cross-dept electives.
+                        elig_cohort = elective_elig_cohort.get(course.id, s.cohort_id)
+                        s_courses_set.add((str(course.id), str(elig_cohort), None))
                 else:
-                    s_courses.append(StudentCourseData(course_id=str(course.id), cohort_id=str(s.cohort_id), batch_id=None))
+                    s_courses_set.add((str(course.id), str(s.cohort_id), None))
 
-        solver_students.append(StudentData(id=str(s.id), courses=s_courses))
+        s_courses_list = [StudentCourseData(course_id=c, cohort_id=k, batch_id=b) for (c, k, b) in s_courses_set]
+        solver_students.append(StudentData(id=str(s.id), courses=s_courses_list))
+
 
     # Load locked assignments
     locked_results = []

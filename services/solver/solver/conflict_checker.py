@@ -307,7 +307,12 @@ def check_h11_no_student_double_booking(
     assignments: list[AssignmentResult],
     inp: SolverInput,
 ) -> list[Violation]:
-    """H11: An individual student's timetable has no double-booking across their course combination."""
+    """H11: An individual student's timetable has no double-booking across their course combination.
+
+    A block_size>1 course spans multiple consecutive slots but counts as ONE course occupying
+    those slots. We track by (course_id, cohort_id, batch_id) identity to avoid treating
+    the same assignment appearing at s+0, s+1, s+2 as separate conflicting entries.
+    """
     violations = []
 
     # Pre-index assignments by course + cohort + batch (or None)
@@ -321,22 +326,30 @@ def check_h11_no_student_double_booking(
         for sc in student.courses:
             student_assigns.extend(assign_by_course.get((sc.course_id, sc.cohort_id, sc.batch_id), []))
 
-        # Check for overlaps
-        by_slot: dict[int, list[AssignmentResult]] = defaultdict(list)
-        for a in student_assigns:
-            for offset in range(a.slot_span):
-                by_slot[a.slot_index + offset].append(a)
+        # Track which assignment objects occupy each slot.
+        # Use assignment identity (id of the object) to avoid counting a single
+        # multi-period assignment as multiple conflicts at the same slot.
+        by_slot: dict[int, set[int]] = defaultdict(set)  # slot → set of assignment object ids
+        slot_assigns: dict[int, list[AssignmentResult]] = defaultdict(list)
 
-        for slot, group in by_slot.items():
+        for a in student_assigns:
+            a_id = id(a)
+            for offset in range(a.slot_span):
+                s = a.slot_index + offset
+                if a_id not in by_slot[s]:
+                    by_slot[s].add(a_id)
+                    slot_assigns[s].append(a)
+
+        for slot, group in slot_assigns.items():
             if len(group) > 1:
-                # To prevent spamming, we could collect unique overlaps
                 courses_overlapping = [f"{a.course_id}({a.batch_id or 'all'})" for a in group]
                 violations.append(Violation(
                     h_code="H11",
                     message=f"Student {student.id} double-booked at slot {slot}: {', '.join(courses_overlapping)}",
                 ))
-    
+
     return violations
+
 
 
 def check_all(

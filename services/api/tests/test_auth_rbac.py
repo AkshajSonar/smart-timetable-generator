@@ -260,20 +260,33 @@ async def test_exams_generate_rbac_200_institution_admin(override_role, mock_db)
 async def test_exams_sessions_rbac_403_faculty(override_role, mock_db):
     tenant_id = uuid.uuid4()
     version_id = uuid.uuid4()
-    _setup_mock_db(mock_db)
+    
+    # Mock a draft version
+    mock_version = MagicMock()
+    mock_version.state = "draft"
+    mock_scalar = MagicMock()
+    mock_scalar.scalar_one_or_none.return_value = mock_version
+    mock_db.execute.return_value = mock_scalar
+    
     override_role({"faculty"})
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/exams/sessions")
+        res = await ac.get(f"/api/v1/tenants/{tenant_id}/exams/sessions?versionId={version_id}")
         assert res.status_code == 403
 
 @pytest.mark.asyncio
 async def test_exams_sessions_rbac_403_student(override_role, mock_db):
     tenant_id = uuid.uuid4()
     version_id = uuid.uuid4()
-    _setup_mock_db(mock_db)
+    
+    mock_version = MagicMock()
+    mock_version.state = "draft"
+    mock_scalar = MagicMock()
+    mock_scalar.scalar_one_or_none.return_value = mock_version
+    mock_db.execute.return_value = mock_scalar
+    
     override_role({"student"})
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get(f"/api/v1/tenants/{tenant_id}/exams/sessions")
+        res = await ac.get(f"/api/v1/tenants/{tenant_id}/exams/sessions?versionId={version_id}")
         assert res.status_code == 403
 
 @pytest.mark.asyncio

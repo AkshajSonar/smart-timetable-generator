@@ -281,19 +281,23 @@ async def get_exam_sessions(
     tenantId: UUID,
     versionId: UUID = Query(..., description="The exam timetable version ID to fetch sessions for"),
     db: AsyncSession = Depends(set_tenant_context),
-    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
+    _role: set[str] = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
 ):
     """
     Get all exam sessions for the given version.
     """
     from app.models.exam_timetable_version import ExamTimetableVersion
-    tv_result = await db.execute(select(ExamTimetableVersion).where(ExamTimetableVersion.id == versionId))
-    tv = tv_result.scalar_one_or_none()
-    if not tv:
+    ev_result = await db.execute(select(ExamTimetableVersion).where(ExamTimetableVersion.id == versionId))
+    ev = ev_result.scalar_one_or_none()
+    if not ev:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Exam timetable version not found"}})
         
+    if not ("institution_admin" in _role or "department_head" in _role or "reviewer" in _role):
+        if ev.state != "published":
+            raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Only admins can view draft exam schedules"}})
+            
     from app.services.schedule_mapper import get_dual_routed_schedules
-    return await get_dual_routed_schedules(db, versionId, tv.state, 'exam')
+    return await get_dual_routed_schedules(db, versionId, ev.state, 'exam')
 
 @router.post("/timetables/{versionId}/approve")
 async def approve_exam_timetable(

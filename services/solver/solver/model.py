@@ -26,6 +26,7 @@ from solver.rule_compiler import compile_constraint_rules
 _COURSE_TYPE_TO_ROOM_TYPES = {
     "core": {"classroom", "lecture_hall", "seminar_hall"},
     "elective": {"classroom", "lecture_hall", "seminar_hall"},
+    "classroom": {"classroom", "lecture_hall", "seminar_hall"},
     "lab": {"lab"},
 }
 
@@ -43,11 +44,17 @@ def build_h1_no_faculty_double_booking(
     assign: dict,
     faculty_ids: list[str],
     num_slots: int,
+    courses_by_id: dict,
 ):
-    """H1: ∀ f,s: Σ_{c,k,b,r} assign[f,c,k,b,r,s] ≤ 1."""
+    """H1: ∀ f,s: Σ_{c,k,b,r} assign[f,c,k,b,r,s'] ≤ 1 for every s' in [s..s+block_size-1]."""
+    assign_map: dict[tuple[str, int], list] = {}
+    for (fv, c, k, b, r, sv), v in assign.items():
+        bs = courses_by_id[c].block_size
+        for offset in range(bs):
+            assign_map.setdefault((fv, sv + offset), []).append(v)
     for f in faculty_ids:
         for s in range(num_slots):
-            vars_at_slot = [v for (fv, c, k, b, r, sv), v in assign.items() if fv == f and sv == s]
+            vars_at_slot = assign_map.get((f, s), [])
             if vars_at_slot:
                 model.Add(sum(vars_at_slot) <= 1)
 
@@ -56,25 +63,30 @@ def build_h2_no_cohort_double_booking(
     model: cp_model.CpModel,
     assign: dict,
     inp: SolverInput,
+    courses_by_id: dict,
 ):
-    """H2: No cohort/batch double-booked across two courses in the same slot."""
+    """H2: No cohort/batch double-booked across two courses in the same slot (block_size-aware)."""
     batches_by_cohort: dict[str, list[str]] = {}
     for k in inp.cohorts:
         batches_by_cohort[k.id] = []
     for b in inp.batches:
         batches_by_cohort[b.cohort_id].append(b.id)
 
+    assign_map: dict[tuple[str, str | None, int], list] = {}
+    for (f, c, kv, b, r, sv), v in assign.items():
+        bs = courses_by_id[c].block_size
+        for offset in range(bs):
+            assign_map.setdefault((kv, b, sv + offset), []).append(v)
     for k in [c.id for c in inp.cohorts]:
         for s in range(inp.num_slots):
-            whole_vars = [v for (f, c, kv, b, r, sv), v in assign.items() if kv == k and b is None and sv == s]
+            whole_vars = assign_map.get((k, None, s), [])
             batches = batches_by_cohort.get(k, [])
-            
             if not batches:
                 if whole_vars:
                     model.Add(sum(whole_vars) <= 1)
             else:
                 for batch_id in batches:
-                    batch_vars = [v for (f, c, kv, b, r, sv), v in assign.items() if kv == k and b == batch_id and sv == s]
+                    batch_vars = assign_map.get((k, batch_id, s), [])
                     if whole_vars or batch_vars:
                         model.Add(sum(whole_vars) + sum(batch_vars) <= 1)
 
@@ -84,11 +96,17 @@ def build_h3_no_room_double_booking(
     assign: dict,
     room_ids: list[str],
     num_slots: int,
+    courses_by_id: dict,
 ):
-    """H3: ∀ r,s: Σ_{f,c,k,b} assign[f,c,k,b,r,s] ≤ 1."""
+    """H3: ∀ r,s: Σ_{f,c,k,b} assign[f,c,k,b,r,s'] ≤ 1 for every s' in [s..s+block_size-1]."""
+    assign_map: dict[tuple[str, int], list] = {}
+    for (f, c, k, b, rv, sv), v in assign.items():
+        bs = courses_by_id[c].block_size
+        for offset in range(bs):
+            assign_map.setdefault((rv, sv + offset), []).append(v)
     for r in room_ids:
         for s in range(num_slots):
-            vars_at_slot = [v for (f, c, k, b, rv, sv), v in assign.items() if rv == r and sv == s]
+            vars_at_slot = assign_map.get((r, s), [])
             if vars_at_slot:
                 model.Add(sum(vars_at_slot) <= 1)
 
@@ -97,15 +115,20 @@ def build_h4_faculty_unavailable_blocks(
     model: cp_model.CpModel,
     assign: dict,
     inp: SolverInput,
+    courses_by_id: dict,
 ):
-    """H4: assign[f,*,*,*,*,s] = 0 for every s in f's blocked set."""
+    """H4: assign[f,*,*,*,*,s] = 0 if any slot in [s..s+block_size-1] is in f's blocked set."""
     blocked_set: dict[str, set[int]] = {}
     for b in inp.blocked_slots:
         blocked_set.setdefault(b.faculty_id, set()).add(b.slot_index)
 
     for (f, c, k, b, r, s), v in assign.items():
-        if s in blocked_set.get(f, set()):
-            model.Add(v == 0)
+        bs = courses_by_id[c].block_size
+        f_blocked = blocked_set.get(f, set())
+        for offset in range(bs):
+            if (s + offset) in f_blocked:
+                model.Add(v == 0)
+                break
 
 
 def build_h5_faculty_eligibility():
@@ -118,7 +141,11 @@ def build_h6_hours_match_required(
     assign: dict,
     inp: SolverInput,
 ):
-    """H6: Σ_{r,s} assign[f,c,k,b,r,s] == required_hours[c,k] for each (c,k,b) eligible."""
+    """H6: Σ_{r,s} assign[f,c,k,b,r,s] * block_size == required_hours[c,k] for each (c,k,b).
+
+    For block_size>1 courses, each selected variable represents block_size hours.
+    So the count of selected variables must equal required_hours / block_size.
+    """
     courses_by_id = {c.id: c for c in inp.courses}
 
     scheduling_units = set()
@@ -126,13 +153,15 @@ def build_h6_hours_match_required(
         scheduling_units.add((c, k, b))
 
     for (course_id, cohort_id, batch_id) in scheduling_units:
-        required = courses_by_id[course_id].hours_per_week
+        course = courses_by_id[course_id]
+        # Number of blocks to schedule = total_hours / block_size
+        num_blocks = course.hours_per_week // course.block_size
         vars_for_unit = [
             v for (f, c, k, b, r, s), v in assign.items()
             if c == course_id and k == cohort_id and b == batch_id
         ]
         if vars_for_unit:
-            model.Add(sum(vars_for_unit) == required)
+            model.Add(sum(vars_for_unit) == num_blocks)
 
 
 def build_h7_valid_period_range():
@@ -145,8 +174,13 @@ def build_h8_workload_cap(
     assign: dict,
     inp: SolverInput,
     compiled: 'CompiledRules',
+    courses_by_id: dict,
 ):
-    """H8: per-week and per-day workload caps for each faculty."""
+    """H8: per-week and per-day workload caps for each faculty (block_size-aware).
+
+    Each selected variable for a block_size=N course counts as N teaching-hours
+    toward the faculty workload cap.
+    """
     for f_data in inp.faculty:
         f = f_data.id
         
@@ -154,16 +188,31 @@ def build_h8_workload_cap(
         cap_week = compiled.faculty_max_periods_week.get(f, f_data.workload_cap_week)
         cap_day = compiled.faculty_max_periods_day.get(f, f_data.workload_cap_day)
         
-        # Weekly cap
-        all_vars = [v for (fv, c, k, b, r, s), v in assign.items() if fv == f]
-        if all_vars:
-            model.Add(sum(all_vars) <= cap_week)
+        # Weekly cap: sum(block_size * var) <= cap_week
+        weighted_vars = []
+        for (fv, c, k, b, r, s), v in assign.items():
+            if fv == f:
+                bs = courses_by_id[c].block_size
+                if bs == 1:
+                    weighted_vars.append(v)
+                else:
+                    weighted_vars.extend([v] * bs)  # count v once per hour it occupies
+        if weighted_vars:
+            model.Add(sum(weighted_vars) <= cap_week)
 
-        # Daily cap
-        for day, day_slots in inp.slots_per_day.items():
-            day_vars = [v for (fv, c, k, b, r, s), v in assign.items() if fv == f and s in day_slots]
-            if day_vars:
-                model.Add(sum(day_vars) <= cap_day)
+        # Daily cap: sum(block_size * var for vars whose start is on this day) <= cap_day
+        day_slots_set = {day: set(slots) for day, slots in inp.slots_per_day.items()}
+        for day, slots in day_slots_set.items():
+            day_weighted = []
+            for (fv, c, k, b, r, s), v in assign.items():
+                if fv == f and s in slots:
+                    bs = courses_by_id[c].block_size
+                    if bs == 1:
+                        day_weighted.append(v)
+                    else:
+                        day_weighted.extend([v] * bs)
+            if day_weighted:
+                model.Add(sum(day_weighted) <= cap_day)
 
 
 def build_h9_room_type_match():
@@ -175,20 +224,28 @@ def build_h10_shared_lab_capacity(
     model: cp_model.CpModel,
     assign: dict,
     inp: SolverInput,
+    courses_by_id: dict,
 ):
-    """H10: For lab type L, slot s: Σ assign using a room of type L at s ≤ count(rooms of type L)."""
+    """H10: For lab type L, slot s: Σ assign using a room of type L at s ≤ count(rooms of type L).
+    Block_size-aware: a variable starting at s with block_size=3 occupies s, s+1, s+2.
+    """
     room_types = set(r.type for r in inp.rooms)
-    rooms_by_type = {t: [] for t in room_types}
+    rooms_by_type_set: dict[str, set[str]] = {t: set() for t in room_types}
     for r in inp.rooms:
-        rooms_by_type[r.type].append(r.id)
+        rooms_by_type_set[r.type].add(r.id)
 
+    # Build occupancy map expanded by block_size
     for room_type in room_types:
-        capacity = inp.room_type_counts.get(room_type, len(rooms_by_type[room_type]))
+        capacity = inp.room_type_counts.get(room_type, len(rooms_by_type_set[room_type]))
+        rt_rooms = rooms_by_type_set[room_type]
+        slot_vars: dict[int, list] = {}
+        for (f, c, k, b, r, sv), v in assign.items():
+            if r in rt_rooms:
+                bs = courses_by_id[c].block_size
+                for offset in range(bs):
+                    slot_vars.setdefault(sv + offset, []).append(v)
         for s in range(inp.num_slots):
-            vars_for_type = [
-                v for (f, c, k, b, r, sv), v in assign.items()
-                if sv == s and r in rooms_by_type[room_type]
-            ]
+            vars_for_type = slot_vars.get(s, [])
             if vars_for_type:
                 model.Add(sum(vars_for_type) <= capacity)
 
@@ -197,15 +254,17 @@ def build_h11_no_student_double_booking(
     model: cp_model.CpModel,
     assign: dict,
     inp: SolverInput,
+    courses_by_id: dict,
 ):
     """H11: An individual student's timetable has no double-booking across their course combination.
-    Uses explicit batch membership logic: if a student is in Batch A for a course, they are only
-    constrained against Batch A's assignments for that course, not Batch B's.
+    Block_size-aware: a course with block_size=3 starting at slot s occupies s, s+1, s+2.
     """
-    assign_map = {}
+    assign_map: dict[tuple[str, str, str | None, int], list] = {}
     for (fv, c, k, b, r, sv), v in assign.items():
-        assign_map.setdefault((c, k, b, sv), []).append(v)
-        
+        bs = courses_by_id[c].block_size
+        for offset in range(bs):
+            assign_map.setdefault((c, k, b, sv + offset), []).append(v)
+
     for student in inp.students:
         for s in range(inp.num_slots):
             student_vars_at_slot = []
@@ -213,7 +272,7 @@ def build_h11_no_student_double_booking(
                 key = (sc.course_id, sc.cohort_id, sc.batch_id, s)
                 if key in assign_map:
                     student_vars_at_slot.extend(assign_map[key])
-            
+
             if len(student_vars_at_slot) > 1:
                 model.Add(sum(student_vars_at_slot) <= 1)
 
@@ -334,12 +393,39 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     # Valid slot indices (H7 by construction)
     valid_slots = set(ps.slot_index for ps in inp.period_slots)
 
+    # H15: block_size>1 courses must not cross day boundaries.
+    # Precompute which slots are valid start-slots for each block_size.
+    slot_to_day: dict[int, int] = {}
+    for ps in inp.period_slots:
+        slot_to_day[ps.slot_index] = ps.weekday
+
+    def _valid_start_slots(block_size: int) -> set[int]:
+        """Return slot indices where a block of `block_size` can start without crossing a day boundary."""
+        if block_size == 1:
+            return valid_slots
+        result = set()
+        for s in valid_slots:
+            # All slots s..s+block_size-1 must exist and be on the same day
+            day = slot_to_day.get(s)
+            if day is None:
+                continue
+            ok = True
+            for off in range(1, block_size):
+                if slot_to_day.get(s + off) != day:
+                    ok = False
+                    break
+            if ok:
+                result.add(s)
+        return result
+
     # Create decision variables: assign[f, c, k, b, r, s]
     assign: dict[tuple[str, str, str, str | None, str, int], cp_model.IntVar] = {}
 
     for (f, c, k, b) in eligible_tuples:
+        course = courses_by_id[c]
+        starts = _valid_start_slots(course.block_size)
         for r in valid_room_pairs.get(c, []):
-            for s in valid_slots:
+            for s in starts:
                 b_str = b if b else "none"
                 var_name = f"assign_{f}_{c}_{k}_{b_str}_{r}_{s}"
                 assign[(f, c, k, b, r, s)] = model.NewBoolVar(var_name)
@@ -353,17 +439,17 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
 
     compiled = compile_constraint_rules(inp)
 
-    build_h1_no_faculty_double_booking(model, assign, faculty_ids, inp.num_slots)
-    build_h2_no_cohort_double_booking(model, assign, inp)
-    build_h3_no_room_double_booking(model, assign, room_ids, inp.num_slots)
-    build_h4_faculty_unavailable_blocks(model, assign, inp)
+    build_h1_no_faculty_double_booking(model, assign, faculty_ids, inp.num_slots, courses_by_id)
+    build_h2_no_cohort_double_booking(model, assign, inp, courses_by_id)
+    build_h3_no_room_double_booking(model, assign, room_ids, inp.num_slots, courses_by_id)
+    build_h4_faculty_unavailable_blocks(model, assign, inp, courses_by_id)
     build_h5_faculty_eligibility()  # by construction
     build_h6_hours_match_required(model, assign, inp)
     build_h7_valid_period_range()  # by construction
-    build_h8_workload_cap(model, assign, inp, compiled)
+    build_h8_workload_cap(model, assign, inp, compiled, courses_by_id)
     build_h9_room_type_match()  # by construction
-    build_h10_shared_lab_capacity(model, assign, inp)
-    build_h11_no_student_double_booking(model, assign, inp)
+    build_h10_shared_lab_capacity(model, assign, inp, courses_by_id)
+    build_h11_no_student_double_booking(model, assign, inp, courses_by_id)
 
     # Enforce locked assignments (FR-9.2)
     for locked in inp.locked_assignments:
@@ -385,6 +471,7 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = timeout_seconds
+    solver.parameters.log_search_progress = True
     status = solver.Solve(model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -449,6 +536,7 @@ def _solve_exams(inp: SolverInput, timeout_seconds: int) -> list[ExamSessionResu
     # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = timeout_seconds
+    solver.parameters.log_search_progress = True
     status = solver.Solve(model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):

@@ -156,12 +156,16 @@ async def get_timetable_version(
     tenantId: UUID,
     versionId: UUID,
     db: AsyncSession = Depends(set_tenant_context),
-    _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
+    _role: set[str] = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
 ):
     tv_result = await db.execute(select(TimetableVersion).where(TimetableVersion.id == versionId))
     tv = tv_result.scalar_one_or_none()
     if not tv:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Timetable version not found"}})
+        
+    if not ("institution_admin" in _role or "department_head" in _role or "reviewer" in _role):
+        if tv.state != "published":
+            raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN", "message": "Only admins can view draft schedules"}})
 
     from app.services.schedule_mapper import get_dual_routed_schedules
     schedules = await get_dual_routed_schedules(db, versionId, tv.state, 'class')
