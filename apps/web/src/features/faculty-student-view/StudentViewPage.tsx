@@ -45,6 +45,7 @@ export function StudentViewPage() {
     tenant_id: TENANT_ID,
     state: 'published',
     version_no: 1,
+    approved_by: 'system',
     assignments,
   };
 

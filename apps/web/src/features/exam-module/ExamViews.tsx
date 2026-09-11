@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { examClient, ExamSessionResult } from '../../api/examClient';
+import { examClient, type ExamSessionResult } from '../../api/examClient';
 
 export function ExamViews() {
   const [tenantId, setTenantId] = useState('00000000-0000-0000-0000-000000000000');

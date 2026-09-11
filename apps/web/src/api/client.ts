@@ -14,9 +14,9 @@ export function getBearerToken() {
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...init?.headers,
+    ...(init?.headers as Record<string, string>),
   };
   if (bearerToken) {
     headers['Authorization'] = `Bearer ${bearerToken}`;
