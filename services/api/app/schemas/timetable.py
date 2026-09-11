@@ -56,6 +56,12 @@ class GenerateResponse(BaseModel):
     violations: list[dict] = []
 
 
+class WhatIfResponse(BaseModel):
+    status: str
+    violations: list[dict] = []
+    assignments: list[PublishedScheduleResponse] = []
+
+
 class EditAssignmentRequest(BaseModel):
     """FR-9.1 manual edit request.
 
