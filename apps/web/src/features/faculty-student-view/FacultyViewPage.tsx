@@ -1,42 +1,33 @@
 import { useEffect, useState } from 'react';
 import { api, type Assignment, type TimetableVersion } from '../../api/client';
 import { TimetableGrid } from '../timetable-grid/TimetableGrid';
-
-const TENANT_ID = '00000000-0000-0000-0000-000000000000'; // Replace with real context later
+import { useTenant } from '../../lib/TenantContext';
 
 export function FacultyViewPage() {
+  const { tenantId, lastVersionId } = useTenant();
   const [staff, setStaff] = useState<any[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
-  
-  // Actually we need a versionId to get assignments.
-  // In a real app we'd fetch the published version or select one.
   const [versionId, setVersionId] = useState<string>('');
-  
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Basic fetch of staff
-    api.staff.list(TENANT_ID)
+    if (lastVersionId && !versionId) setVersionId(lastVersionId);
+  }, [lastVersionId]);
+
+  useEffect(() => {
+    api.staff.list(tenantId)
       .then(res => setStaff(res.items))
       .catch(e => console.error("Failed to load staff profiles", e));
-  }, []);
+  }, [tenantId]);
 
   const handleFetchTimetable = async () => {
-    if (!selectedStaffId || !versionId) return;
+    if (!selectedStaffId) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await api.staff.getTimetable(TENANT_ID, selectedStaffId);
-      // Ensure we only show assignments for this version (or just use all if API filtered it)
-      // The backend API might not filter by version if it's meant to show the active one, 
-      // but if the endpoint is like GET /staff-profiles/{id}/timetable?versionId=..., we'd pass it.
-      // Wait, let me check backend. The spec says GET /staff-profiles/{id}/timetable returns assignments for published version.
-      // For now, just set them.
-      
-      // Let's filter by version ID on the client side just in case, though the backend might already do it or we might need to pass it.
-      // Wait, client.ts getTimetable doesn't take versionId for staff. Let's just use it as is.
+      const data = await api.staff.getTimetable(tenantId, selectedStaffId, versionId || undefined);
       setAssignments(data);
     } catch (err: any) {
       setError(err.message || "Failed to load staff timetable");
@@ -47,7 +38,7 @@ export function FacultyViewPage() {
 
   const mockTimetableVersion: TimetableVersion = {
     id: versionId || 'faculty-view',
-    tenant_id: TENANT_ID,
+    tenant_id: tenantId,
     state: 'published',
     version_no: 1,
     approved_by: 'system',

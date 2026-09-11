@@ -1,37 +1,33 @@
 import { useEffect, useState } from 'react';
 import { api, type Student, type Assignment, type TimetableVersion } from '../../api/client';
 import { TimetableGrid } from '../timetable-grid/TimetableGrid';
-
-const TENANT_ID = '00000000-0000-0000-0000-000000000000'; // Replace with real context later
+import { useTenant } from '../../lib/TenantContext';
 
 export function StudentViewPage() {
+  const { tenantId, lastVersionId } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  
-  // Actually we need a versionId to get assignments.
-  // In a real app we'd fetch the published version or select one.
   const [versionId, setVersionId] = useState<string>('');
-  
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // We should also fetch course names, etc if needed.
+  useEffect(() => {
+    if (lastVersionId && !versionId) setVersionId(lastVersionId);
+  }, [lastVersionId]);
   
   useEffect(() => {
-    // Basic fetch of students
-    // NOTE: Replace TENANT_ID with the context value.
-    api.students.list(TENANT_ID)
+    api.students.list(tenantId)
       .then(res => setStudents(res.items))
       .catch(e => console.error("Failed to load students", e));
-  }, []);
+  }, [tenantId]);
 
   const handleFetchTimetable = async () => {
     if (!selectedStudentId || !versionId) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await api.students.getTimetable(TENANT_ID, selectedStudentId, versionId);
+      const data = await api.students.getTimetable(tenantId, selectedStudentId, versionId);
       setAssignments(data);
     } catch (err: any) {
       setError(err.message || "Failed to load student timetable");
@@ -42,7 +38,7 @@ export function StudentViewPage() {
 
   const mockTimetableVersion: TimetableVersion = {
     id: versionId,
-    tenant_id: TENANT_ID,
+    tenant_id: tenantId,
     state: 'published',
     version_no: 1,
     approved_by: 'system',

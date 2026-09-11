@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api/client';
-
-const TENANT_ID = '00000000-0000-0000-0000-000000000000'; // Replace with real context later
+import { useTenant } from '../../lib/TenantContext';
 
 interface ParsedRule {
   id: string;
@@ -10,6 +9,7 @@ interface ParsedRule {
 }
 
 export function RuleBuilderPage() {
+  const { tenantId } = useTenant();
   const [nlInput, setNlInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function RuleBuilderPage() {
     setEditMode(false);
     
     try {
-      const data = await api.rules.parse(TENANT_ID, nlInput);
+      const data = await api.rules.parse(tenantId, nlInput);
       if (data.parsed_fields && data.parsed_fields.rule_type === 'unsupported') {
         // Fallback to structured form
         setEditMode(true);
@@ -58,7 +58,7 @@ export function RuleBuilderPage() {
     if (!parsed) return;
     setLoading(true);
     try {
-      await api.rules.confirm(TENANT_ID, parsed.id);
+      await api.rules.confirm(tenantId, parsed.id);
       setSuccess("Rule confirmed and applied successfully!");
       setParsed(null);
       setNlInput('');
@@ -78,7 +78,7 @@ export function RuleBuilderPage() {
       if (payload.threshold === '') delete payload.threshold;
       if (payload.weight === '') delete payload.weight;
       
-      await api.rules.create(TENANT_ID, payload);
+      await api.rules.create(tenantId, payload);
       setSuccess("Structured rule created successfully!");
       setEditMode(false);
       setParsed(null);

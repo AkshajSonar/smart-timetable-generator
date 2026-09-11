@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api, type TimetableVersion } from '../../api/client';
 import { TimetableGrid } from '../timetable-grid/TimetableGrid';
-
-const TENANT_ID = '00000000-0000-0000-0000-000000000000'; // Replace with real context later
+import { useTenant } from '../../lib/TenantContext';
 
 export function PublishPage() {
+  const { tenantId, lastVersionId } = useTenant();
   const [versionId, setVersionId] = useState<string>('');
   const [version, setVersion] = useState<TimetableVersion | null>(null);
   
@@ -12,13 +12,18 @@ export function PublishPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Auto-populate from the last generated version
+  useEffect(() => {
+    if (lastVersionId && !versionId) setVersionId(lastVersionId);
+  }, [lastVersionId]);
+
   const handleFetchTimetable = async () => {
     if (!versionId) return;
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      const data = await api.timetables.get(TENANT_ID, versionId);
+      const data = await api.timetables.get(tenantId, versionId);
       setVersion(data);
     } catch (err: any) {
       setError(err.message || "Failed to load timetable version");
@@ -32,9 +37,8 @@ export function PublishPage() {
     try {
       setLoading(true);
       setError(null);
-      await api.timetables.approve(TENANT_ID, version.id, version.version_no);
+      await api.timetables.approve(tenantId, version.id, version.version_no);
       setSuccessMsg("Timetable approved successfully!");
-      // Refresh to get new state and version_no
       await handleFetchTimetable();
     } catch (err: any) {
       setError(err.message || "Failed to approve timetable");
@@ -47,9 +51,8 @@ export function PublishPage() {
     try {
       setLoading(true);
       setError(null);
-      await api.timetables.publish(TENANT_ID, version.id, version.version_no);
+      await api.timetables.publish(tenantId, version.id, version.version_no);
       setSuccessMsg("Timetable published successfully!");
-      // Refresh to get new state and version_no
       await handleFetchTimetable();
     } catch (err: any) {
       setError(err.message || "Failed to publish timetable");

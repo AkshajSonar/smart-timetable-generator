@@ -113,3 +113,46 @@ def test_h11_not_overconstrained(base_input: SolverInput):
     # Should be valid for H11 because student 1 is in b1 (slot 1) and c2 (slot 0). 
     # They don't care that b2 is at slot 0.
     assert len(h11_violations) == 0
+
+def test_h11_cross_dept_elective():
+    """Regression test for Phase 8 fix: cross-dept elective conflict triggers H11.
+    Student 2 belongs to cohort k2. They take core course c3 in k2.
+    They also take elective c2, which is 'hosted' by cohort k1 (its eligibility matches k1).
+    If c3 and c2 are scheduled in the same slot, H11 should catch it for Student 2.
+    """
+    from solver.data_types import AssignmentResult
+    
+    cross_input = SolverInput(
+        faculty=[FacultyData(id="f1", workload_cap_week=10, workload_cap_day=10)],
+        courses=[
+            CourseData(id="c2", type="elective", hours_per_week=1),
+            CourseData(id="c3", type="core", hours_per_week=1),
+        ],
+        cohorts=[CohortData(id="k1", name="Cohort 1"), CohortData(id="k2", name="Cohort 2")],
+        rooms=[RoomData(id="r1", type="classroom", capacity=30)],
+        batches=[],
+        eligibility=[],
+        period_slots=[PeriodSlot(slot_index=0, weekday=0, period_index=0)],
+        blocked_slots=[],
+        slots_per_day={0: [0]},
+        num_slots=1,
+        room_type_counts={"classroom": 1},
+        students=[
+            StudentData(id="s2", courses=[
+                StudentCourseData(course_id="c3", cohort_id="k2", batch_id=None),
+                StudentCourseData(course_id="c2", cohort_id="k1", batch_id=None), # cross-dept elective
+            ])
+        ]
+    )
+    
+    bad_assignments = [
+        AssignmentResult(faculty_id="f1", course_id="c3", cohort_id="k2", batch_id=None, room_id="r1", slot_index=0),
+        AssignmentResult(faculty_id="f1", course_id="c2", cohort_id="k1", batch_id=None, room_id="r1", slot_index=0),
+    ]
+    
+    violations = check_all(bad_assignments, cross_input)
+    h11_violations = [v for v in violations if v.h_code == "H11"]
+    
+    assert len(h11_violations) > 0, "H11 failed to flag double booking for a cross-dept elective"
+    assert "Student s2 double-booked at slot 0" in h11_violations[0].message
+

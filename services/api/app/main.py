@@ -20,6 +20,7 @@ from app.routers import (
     users,
     substitutions,
     rules,
+    terms,
 )
 
 app = FastAPI(
@@ -52,6 +53,7 @@ app.include_router(exams.router)
 app.include_router(users.router)
 app.include_router(substitutions.router)
 app.include_router(rules.router)
+app.include_router(terms.router)
 
 
 

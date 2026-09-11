@@ -3,45 +3,39 @@
  * Phase 1: no auth, user supplies tenantId manually.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api, type TimetableVersion, type LoadVerificationReport } from '../api/client';
 import { TimetableGrid } from '../features/timetable-grid/TimetableGrid';
+import { useTenant } from '../lib/TenantContext';
 
 type Status = 'idle' | 'loading-cohorts' | 'ready' | 'generating' | 'done' | 'error';
 
 export function GeneratePage() {
-  const [tenantId, setTenantId] = useState('');
-  const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
+  const { tenantId, termId, tenantName, loading: tenantLoading, setLastVersionId } = useTenant();
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [timetable, setTimetable] = useState<TimetableVersion | null>(null);
   const [report, setReport] = useState<LoadVerificationReport | null>(null);
   const [violations, setViolations] = useState<{ h_code: string; message: string }[]>([]);
-
-  useEffect(() => {
-    api.users.getTenants().then(res => {
-      setTenants(res.tenants);
-      if (res.tenants.length > 0) {
-        setTenantId(res.tenants[0].id);
-      }
-    }).catch(err => console.error(err));
-  }, []);
+  const [generatedVersionId, setGeneratedVersionId] = useState<string>('');
 
   async function generate() {
-    if (!tenantId.trim()) return;
+    if (!tenantId || !termId) { setError('Tenant or Term not loaded yet — wait a moment.'); return; }
     setStatus('generating');
     setError('');
     setTimetable(null);
     setViolations([]);
     try {
-      const genRes = await api.timetables.generate(tenantId.trim());
+      const genRes = await api.timetables.generate(tenantId, termId);
+      setGeneratedVersionId(genRes.timetable_version_id);
+      setLastVersionId(genRes.timetable_version_id); // share with other pages
+      
+      const tv = await api.timetables.get(tenantId, genRes.timetable_version_id);
+      setTimetable(tv);
       setViolations(genRes.violations);
       
-      const tv = await api.timetables.get(tenantId.trim(), genRes.timetable_version_id);
-      setTimetable(tv);
-      
       try {
-        const rep = await api.reports.getVerification(tenantId.trim(), genRes.timetable_version_id);
+        const rep = await api.reports.getVerification(tenantId, genRes.timetable_version_id);
         setReport(rep);
       } catch (e) {
         console.warn("Could not load report", e);
@@ -54,7 +48,7 @@ export function GeneratePage() {
     }
   }
 
-  const busy = status === 'loading-cohorts' || status === 'generating';
+  const busy = status === 'generating' || tenantLoading;
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-deep)' }}>
@@ -68,54 +62,35 @@ export function GeneratePage() {
             Smart Timetable Generator
           </h1>
           <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            Phase 1 — CP-SAT solver · H1–H9 guaranteed conflict-free
+            {tenantName ? `Tenant: ${tenantName}` : 'Loading tenant...'} · CP-SAT solver · H1–H11 guaranteed conflict-free
           </p>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-8 py-10 space-y-8">
-        {/* Step 1: Tenant */}
+        {/* Tenant info + generate */}
         <section className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-            Step 1 — Tenant
+            Generate Timetable
           </h2>
-          <div className="flex gap-3 items-end">
-            <div className="flex-1 space-y-1.5">
-              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Tenant ID (UUID)
-              </label>
-              <select
-                id="tenant-id-input"
-                value={tenantId}
-                onChange={e => setTenantId(e.target.value)}
-                className="w-full rounded-lg px-4 py-2.5 text-sm font-mono outline-none transition-all"
-                style={{
-                  background: 'var(--bg-panel)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                }}
-                onFocus={e => e.currentTarget.style.borderColor = 'var(--border-accent)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
-              >
-                {tenants.map(t => (
-                  <option key={t.id} value={t.id}>{t.name} ({t.id})</option>
-                ))}
-              </select>
+          <div className="flex gap-3 items-center">
+            <div className="flex-1 text-sm font-mono rounded-lg px-4 py-2.5" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+              {tenantLoading ? 'Resolving tenant…' : (tenantId || 'No tenant found')}
             </div>
-              <button
-                id="generate-btn"
-                onClick={generate}
-                disabled={busy || !tenantId.trim()}
-                className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
-                style={{ background: 'var(--accent)', color: '#fff' }}
-              >
-                {status === 'generating' && (
-                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
-                {status === 'generating' ? 'Solving…' : '⚡ Generate Timetable'}
-              </button>
-            </div>
-          </section>
+            <button
+              id="generate-btn"
+              onClick={generate}
+              disabled={busy || !tenantId || !termId}
+              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              {status === 'generating' && (
+                <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              )}
+              {status === 'generating' ? 'Solving…' : '⚡ Generate Timetable'}
+            </button>
+          </div>
+        </section>
 
         {/* Error */}
         {status === 'error' && (
@@ -189,6 +164,11 @@ export function GeneratePage() {
                   )}
                 </p>
               </div>
+            </div>
+            {/* Version ID banner for easy copy-paste into other tabs */}
+            <div className="px-4 py-3 rounded-xl text-xs font-mono flex items-center gap-2 select-all" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
+              <span className="font-sans font-semibold text-indigo-300">Version ID:</span>
+              {generatedVersionId}
             </div>
             <TimetableGrid timetable={timetable} />
           </section>

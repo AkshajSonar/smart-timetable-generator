@@ -68,6 +68,14 @@ export interface Cohort {
   type: string;
 }
 
+export interface AcademicTerm {
+  id: string;
+  tenant_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+}
+
 export interface LoadVerificationItem {
   id: string;
   name: string;
@@ -107,10 +115,10 @@ export const api = {
       request<Assignment[]>(`/api/v1/tenants/${tenantId}/students/${studentId}/timetable?versionId=${versionId}`),
   },
   timetables: {
-    generate: (tenantId: string) =>
+    generate: (tenantId: string, termId: string) =>
       request<GenerateResponse>(`/api/v1/tenants/${tenantId}/timetables/generate`, {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ term_id: termId }),
       }),
     get: (tenantId: string, versionId: string) =>
       request<TimetableVersion>(`/api/v1/tenants/${tenantId}/timetables/${versionId}`),
@@ -144,8 +152,18 @@ export const api = {
   staff: {
     list: (tenantId: string) =>
       request<PaginatedResponse<any>>(`/api/v1/tenants/${tenantId}/staff-profiles?limit=500`),
-    getTimetable: (tenantId: string, staffId: string) =>
-      request<Assignment[]>(`/api/v1/tenants/${tenantId}/staff-profiles/${staffId}/timetable`),
+    getTimetable: (tenantId: string, staffId: string, versionId?: string) => {
+      const qs = versionId ? `?version_id=${versionId}` : '';
+      return request<Assignment[]>(`/api/v1/tenants/${tenantId}/staff-profiles/${staffId}/timetable${qs}`);
+    },
+  },
+  terms: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<AcademicTerm>>(`/api/v1/tenants/${tenantId}/terms?limit=10`),
+    getFirst: async (tenantId: string): Promise<AcademicTerm | null> => {
+      const res = await request<PaginatedResponse<AcademicTerm>>(`/api/v1/tenants/${tenantId}/terms?limit=1`);
+      return res.items[0] ?? null;
+    },
   },
   reports: {
     getVerification: (tenantId: string, versionId: string) =>
