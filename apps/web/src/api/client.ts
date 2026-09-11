@@ -51,6 +51,7 @@ export interface TimetableVersion {
   tenant_id: string;
   state: string;
   version_no: number;
+  approved_by: string | null;
   assignments: Assignment[];
 }
 
@@ -113,6 +114,36 @@ export const api = {
       }),
     get: (tenantId: string, versionId: string) =>
       request<TimetableVersion>(`/api/v1/tenants/${tenantId}/timetables/${versionId}`),
+    approve: (tenantId: string, versionId: string, versionNo: number) =>
+      request(`/api/v1/tenants/${tenantId}/timetables/${versionId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ version_no: versionNo }),
+      }),
+    publish: (tenantId: string, versionId: string, versionNo: number) =>
+      request(`/api/v1/tenants/${tenantId}/timetables/${versionId}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({ version_no: versionNo }),
+      }),
+  },
+  rules: {
+    parse: (tenantId: string, rawInputText: string) =>
+      request<any>(`/api/v1/tenants/${tenantId}/rules/parse`, {
+        method: 'POST',
+        body: JSON.stringify({ raw_input_text: rawInputText }),
+      }),
+    confirm: (tenantId: string, ruleId: string) =>
+      request(`/api/v1/tenants/${tenantId}/rules/${ruleId}/confirm`, {
+        method: 'POST',
+      }),
+    create: (tenantId: string, data: any) =>
+      request(`/api/v1/tenants/${tenantId}/rules`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+  staff: {
+    getTimetable: (tenantId: string, staffId: string) =>
+      request<Assignment[]>(`/api/v1/tenants/${tenantId}/staff-profiles/${staffId}/timetable`),
   },
   reports: {
     getVerification: (tenantId: string, versionId: string) =>
