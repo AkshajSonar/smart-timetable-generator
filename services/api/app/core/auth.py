@@ -50,21 +50,43 @@ async def verify_jwt(
     email = payload.get("email")
     
     # Auto-provisioning check
-    # Note: An auto-provisioned identity always gets platform_role = null.
-    # Auto-provisioning creates a login record only - it grants no access by itself.
-    # A freshly auto-provisioned identity with no staff_profile anywhere will be
-    # correctly rejected by every RBAC check because it has nothing to authorize against.
-    result = await db.execute(select(Identity).where(Identity.id == identity_id))
+    # Check if we have an identity matching the ID or linked via auth_provider_ref
+    from sqlalchemy import or_
+    result = await db.execute(
+        select(Identity).where(
+            or_(
+                Identity.id == identity_id,
+                Identity.auth_provider_ref == str(identity_id)
+            )
+        )
+    )
     identity = result.scalars().first()
 
     if not identity:
-        identity = Identity(
-            id=identity_id,
-            email=email or f"{identity_id}@unknown",
-            auth_provider_ref="keycloak",
-            platform_role=None  # Explicitly None
-        )
-        db.add(identity)
-        await db.commit()
+        # Check for collision by email (stub identity pending first login)
+        if email:
+            result_email = await db.execute(
+                select(Identity).where(
+                    Identity.email == email,
+                    Identity.auth_provider_ref == None
+                )
+            )
+            identity = result_email.scalars().first()
 
-    return identity_id
+        if identity:
+            # Stub found, link it
+            identity.auth_provider_ref = str(identity_id)
+            # If Keycloak provides a full_name that we don't have, we could populate it here
+            await db.commit()
+        else:
+            # No stub found, create a new one
+            identity = Identity(
+                id=identity_id,
+                email=email or f"{identity_id}@unknown",
+                auth_provider_ref="keycloak", # original default, though str(identity_id) is better, but preserving behavior
+                platform_role=None  # Explicitly None
+            )
+            db.add(identity)
+            await db.commit()
+
+    return identity.id
