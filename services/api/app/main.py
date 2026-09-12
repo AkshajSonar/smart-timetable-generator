@@ -22,6 +22,7 @@ from app.routers import (
     substitutions,
     rules,
     terms,
+    notifications,
 )
 
 ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -84,6 +85,7 @@ app.include_router(users.router)
 app.include_router(substitutions.router)
 app.include_router(rules.router)
 app.include_router(terms.router)
+app.include_router(notifications.router)
 
 
 

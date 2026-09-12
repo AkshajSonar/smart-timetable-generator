@@ -313,4 +313,17 @@ export const api = {
         body: JSON.stringify({ rows }),
       }),
   },
+  notifications: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<any>>(`/api/v1/tenants/${tenantId}/notifications`),
+    markRead: (tenantId: string, notificationId: string) =>
+      request<{ status: string }>(`/api/v1/tenants/${tenantId}/notifications/${notificationId}/read`, { method: 'PUT' }),
+    getPreferences: (tenantId: string) =>
+      request<{ email: boolean; push: boolean; sms: boolean }>(`/api/v1/tenants/${tenantId}/notifications/preferences`),
+    updatePreferences: (tenantId: string, data: { email: boolean; push: boolean; sms: boolean }) =>
+      request<{ email: boolean; push: boolean; sms: boolean }>(`/api/v1/tenants/${tenantId}/notifications/preferences`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
 };
