@@ -1,0 +1,30 @@
+"""Models package — import all models so Alembic sees them."""
+
+from app.models.base import Base  # noqa: F401
+from app.models.identity import Identity  # noqa: F401
+from app.models.tenant import Tenant  # noqa: F401
+from app.models.academic_term import AcademicTerm  # noqa: F401
+from app.models.campus import Campus  # noqa: F401
+from app.models.department import Department  # noqa: F401
+from app.models.course import Course  # noqa: F401
+from app.models.cohort import Cohort  # noqa: F401
+from app.models.batch import Batch  # noqa: F401
+from app.models.room import Room  # noqa: F401
+from app.models.staff_profile import StaffProfile  # noqa: F401
+from app.models.staff_availability_block import StaffAvailabilityBlock  # noqa: F401
+from app.models.eligibility import Eligibility  # noqa: F401
+from app.models.period_template import PeriodTemplate  # noqa: F401
+from app.models.constraint_rule import ConstraintRule  # noqa: F401
+from app.models.timetable_version import TimetableVersion  # noqa: F401
+from app.models.assignment import Assignment  # noqa: F401
+from app.models.stubs import (  # noqa: F401
+    StudentProfile,
+    ElectiveSection,
+    EnrollmentRecord,
+    ExceptionCalendar,
+    ExamTimetableVersion,
+    ExamSession,
+    SubstitutionLog,
+    AuditLog,
+    Notification,
+)

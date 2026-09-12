@@ -1,0 +1,17 @@
+[project]
+name = "timetable-solver"
+version = "0.1.0"
+description = "OR-Tools CP-SAT solver for Smart Timetable Generator"
+requires-python = ">=3.11"
+dependencies = [
+    "ortools>=9.10.4067",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

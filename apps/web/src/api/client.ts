@@ -1,0 +1,74 @@
+/**
+ * Typed API client — all calls go through /api/v1/
+ * Base URL defaults to the Vite dev proxy (same origin) or VITE_API_URL env var.
+ */
+
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+export interface Assignment {
+  id: string;
+  staff_profile_id: string;
+  course_id: string;
+  cohort_id: string;
+  room_id: string;
+  slot_start: number;
+  slot_span: number;
+}
+
+export interface TimetableVersion {
+  id: string;
+  tenant_id: string;
+  state: string;
+  version_no: number;
+  assignments: Assignment[];
+}
+
+export interface GenerateResponse {
+  timetable_version_id: string;
+  status: string;
+  violations: { h_code: string; message: string }[];
+}
+
+export interface Cohort {
+  id: string;
+  tenant_id: string;
+  name: string;
+  type: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  next_cursor: string | null;
+}
+
+// ── API calls ────────────────────────────────────────────────────────────────
+
+export const api = {
+  cohorts: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<Cohort>>(`/api/v1/tenants/${tenantId}/cohorts?limit=100`),
+  },
+  timetables: {
+    generate: (tenantId: string, cohortId: string) =>
+      request<GenerateResponse>(`/api/v1/tenants/${tenantId}/timetables/generate`, {
+        method: 'POST',
+        body: JSON.stringify({ cohort_id: cohortId }),
+      }),
+    get: (tenantId: string, versionId: string) =>
+      request<TimetableVersion>(`/api/v1/tenants/${tenantId}/timetables/${versionId}`),
+  },
+};
