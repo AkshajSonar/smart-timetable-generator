@@ -31,7 +31,7 @@ class PublishedScheduleResponse(BaseModel):
     course_name: Optional[str] = None
     room_name: Optional[str] = None
     batch_name: Optional[str] = None
-    slot_index: int
+    slot_start: int
     slot_span: int
     is_locked: bool = False
 
@@ -42,7 +42,8 @@ class TimetableRead(BaseModel):
     tenant_id: UUID
     state: str
     version_no: int
-    schedules: list[PublishedScheduleResponse] = []
+    approved_by: Optional[UUID] = None
+    assignments: list[PublishedScheduleResponse] = []
 
 
 class GenerateRequest(BaseModel):

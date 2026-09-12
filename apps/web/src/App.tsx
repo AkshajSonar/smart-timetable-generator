@@ -1,64 +1,54 @@
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MainLayout } from './components/layout/MainLayout';
+import { GenerationProgressPage } from './pages/GenerationProgressPage';
+import { ReviewTimetablePage } from './pages/ReviewTimetablePage';
 import { GeneratePage } from './pages/GeneratePage';
 import { StudentViewPage, FacultyViewPage } from './features/faculty-student-view';
-import { ExamViews } from './features/exam-module/ExamViews';
+import { CohortViewPage } from './pages/CohortViewPage';
+import { ExamsModulePage } from './features/exam-module/ExamsModulePage';
 import { PublishPage } from './features/publish/PublishPage';
 import { RuleBuilderPage } from './features/rule-builder/RuleBuilderPage';
+import { CoursesPage } from './pages/CoursesPage';
+import { FacultyPage } from './pages/FacultyPage';
+import { RoomsPage } from './pages/RoomsPage';
+import { LoginPage } from './pages/LoginPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { SetupWizardPage } from './pages/SetupWizardPage';
+import { SubstitutionsPage } from './pages/SubstitutionsPage';
+import { ReportsPage } from './pages/ReportsPage';
 import './App.css';
 
 function App() {
-  const [currentTab, setCurrentTab] = useState<'generate' | 'faculty' | 'students' | 'exams' | 'publish' | 'rules'>('generate');
-
   return (
-    <div className="min-h-screen bg-slate-950 p-8 flex flex-col gap-6">
-      <nav className="max-w-6xl mx-auto w-full flex gap-4 border-b border-white/10 pb-4 overflow-x-auto">
-        <button
-          onClick={() => setCurrentTab('generate')}
-          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'generate' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          Generate / Reports
-        </button>
-        <button
-          onClick={() => setCurrentTab('publish')}
-          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'publish' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          Review & Publish
-        </button>
-        <button
-          onClick={() => setCurrentTab('rules')}
-          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'rules' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          Rule Builder
-        </button>
-        <button
-          onClick={() => setCurrentTab('faculty')}
-          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'faculty' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          Faculty View
-        </button>
-        <button
-          onClick={() => setCurrentTab('students')}
-          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'students' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          Student View
-        </button>
-        <button
-          onClick={() => setCurrentTab('exams')}
-          className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition-colors ${currentTab === 'exams' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-        >
-          Exams
-        </button>
-      </nav>
-
-      <div className="max-w-6xl mx-auto w-full">
-        {currentTab === 'generate' && <GeneratePage />}
-        {currentTab === 'publish' && <PublishPage />}
-        {currentTab === 'rules' && <RuleBuilderPage />}
-        {currentTab === 'faculty' && <FacultyViewPage />}
-        {currentTab === 'students' && <StudentViewPage />}
-        {currentTab === 'exams' && <ExamViews />}
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        
+        <Route path="/" element={<MainLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="setup" element={<SetupWizardPage />} />
+          <Route path="courses" element={<CoursesPage />} />
+          <Route path="faculty" element={<FacultyPage />} />
+          <Route path="rooms" element={<RoomsPage />} />
+          
+          <Route path="rules" element={<RuleBuilderPage />} />
+          <Route path="generate" element={<GeneratePage />} />
+          <Route path="progress" element={<GenerationProgressPage />} />
+          <Route path="review" element={<ReviewTimetablePage />} />
+          <Route path="publish" element={<PublishPage />} />
+          
+          <Route path="timetable" element={<CohortViewPage />} />
+          <Route path="exams" element={<ExamsModulePage />} />
+          <Route path="substitutions" element={<SubstitutionsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="student-view" element={<StudentViewPage />} />
+          
+          {/* Legacy Faculty View accessible directly for now */}
+          <Route path="faculty-view" element={<FacultyViewPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
 

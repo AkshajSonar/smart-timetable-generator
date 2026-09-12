@@ -101,7 +101,7 @@ async def get_dual_routed_schedules(db: AsyncSession, version_id: UUID, state: s
                         course_name=course_names.get(a.course_id),
                         room_name=room_names.get(a.room_id),
                         batch_name=None,
-                        slot_index=a.slot_start,
+                        slot_start=a.slot_start,
                         slot_span=1,
                         is_locked=False
                     )
@@ -120,11 +120,10 @@ async def get_dual_routed_schedules(db: AsyncSession, version_id: UUID, state: s
                         cohort_name=cohort_names.get(a.cohort_id),
                         course_name=course_names.get(a.course_id),
                         room_name=room_names.get(a.room_id),
-                        batch_name=batch_names.get(a.batch_id) if getattr(a, 'batch_id', None) else None,
-                        slot_index=a.slot_start,
+                        batch_name=batch_names.get(a.batch_id) if a.batch_id else None,
+                        slot_start=a.slot_start,
                         slot_span=a.slot_span,
                         is_locked=a.is_locked
                     )
                 )
         return schedules
-

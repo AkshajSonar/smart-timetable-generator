@@ -39,12 +39,23 @@ class ParsedRule(BaseModel):
 async def parse_rule_nl(text: str) -> ParsedRule:
     """Parse a natural language rule into structured fields using an LLM."""
     if not settings.openai_api_key:
-        logger.warning("OPENAI_API_KEY is missing. Mocking LLM response.")
+        logger.warning("OPENAI_API_KEY is missing. Mocking LLM response based on keywords.")
+        text_lower = text.lower()
+        if "more than" in text_lower and "day" in text_lower:
+            return ParsedRule(rule_type="max_periods_per_day", scope="tenant", threshold=4, unit="periods", polarity="max")
+        elif "back-to-back" in text_lower or "consecutive" in text_lower:
+            return ParsedRule(rule_type="no_consecutive_same_course", scope="tenant", polarity="forbid")
+        elif "gap" in text_lower or "free period" in text_lower:
+            return ParsedRule(rule_type="min_gap_between_periods", scope="faculty", threshold=1, unit="periods", polarity="min")
+        elif "morning" in text_lower or "afternoon" in text_lower:
+            return ParsedRule(rule_type="preferred_time_of_day", scope="course", polarity="require")
+        elif "spread" in text_lower or "evenly" in text_lower:
+            return ParsedRule(rule_type="balance_load_across_week", scope="faculty", polarity="require")
+            
         return ParsedRule(
             rule_type="unsupported",
             scope="tenant"
         )
-        
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     
     system_prompt = """You are a scheduling rule parser. 

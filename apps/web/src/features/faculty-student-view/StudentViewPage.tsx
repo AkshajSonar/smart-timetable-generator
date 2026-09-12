@@ -1,109 +1,84 @@
-import { useEffect, useState } from 'react';
-import { api, type Student, type Assignment, type TimetableVersion } from '../../api/client';
+import { useState, useEffect } from 'react';
+import { api, type TimetableVersion, type Student } from '../../api/client';
 import { TimetableGrid } from '../timetable-grid/TimetableGrid';
 import { useTenant } from '../../lib/TenantContext';
+import { Loader2 } from 'lucide-react';
 
 export function StudentViewPage() {
   const { tenantId, lastVersionId } = useTenant();
+  const [timetable, setTimetable] = useState<TimetableVersion | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [versionId, setVersionId] = useState<string>('');
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (lastVersionId && !versionId) setVersionId(lastVersionId);
-  }, [lastVersionId]);
-  
-  useEffect(() => {
-    api.students.list(tenantId)
-      .then(res => setStudents(res.items))
-      .catch(e => console.error("Failed to load students", e));
-  }, [tenantId]);
-
-  const handleFetchTimetable = async () => {
-    if (!selectedStudentId || !versionId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.students.getTimetable(tenantId, selectedStudentId, versionId);
-      setAssignments(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load student timetable");
-    } finally {
-      setLoading(false);
+    async function load() {
+      if (!tenantId || !lastVersionId) return;
+      setLoading(true);
+      try {
+        const [fullTimetable, studentsRes] = await Promise.all([
+          api.timetables.get(tenantId, lastVersionId),
+          api.students.list(tenantId)
+        ]);
+        setTimetable(fullTimetable);
+        setStudents(studentsRes.items);
+        if (studentsRes.items.length > 0) {
+          setSelectedStudentId(studentsRes.items[0].id);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     }
-  };
+    load();
+  }, [tenantId, lastVersionId]);
 
-  const mockTimetableVersion: TimetableVersion = {
-    id: versionId,
-    tenant_id: tenantId,
-    state: 'published',
-    version_no: 1,
-    approved_by: 'system',
-    assignments,
-  };
+  const selectedStudent = students.find(s => s.id === selectedStudentId);
+  const filteredTimetable = timetable && selectedStudent ? {
+    ...timetable,
+    assignments: timetable.assignments.filter(a => a.cohort_id === selectedStudent.cohort_id)
+  } : null;
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-white">Student Timetable View</h1>
-        <p className="text-slate-400">View an individualized timetable for a specific student, integrating their core batches and enrolled electives.</p>
-      </header>
-
-      <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-wrap gap-4 items-end">
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <label className="text-sm font-medium text-slate-300">Select Student</label>
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">My Timetable (Student)</h1>
+          <p className="text-slate-500">View your personalized class schedule.</p>
+        </div>
+        <div className="flex items-center gap-4">
           <select 
-            className="px-3 py-2 bg-slate-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-indigo-500"
             value={selectedStudentId}
             onChange={(e) => setSelectedStudentId(e.target.value)}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
           >
-            <option value="">-- Choose Student --</option>
             {students.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.external_student_code} (ID: {s.id.slice(0, 8)})
-              </option>
+              <option key={s.id} value={s.id}>{s.name} ({s.cohort_name})</option>
             ))}
           </select>
+          <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
+            <button className="px-3 py-1.5 text-sm font-medium rounded-md bg-white text-indigo-600 shadow-sm transition-colors">Grid View</button>
+            <button className="px-3 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition-colors">List View</button>
+          </div>
         </div>
-        
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-          <label className="text-sm font-medium text-slate-300">Timetable Version ID</label>
-          <input 
-            type="text"
-            className="px-3 py-2 bg-slate-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-indigo-500"
-            placeholder="e.g. 123e4567-e89b-..."
-            value={versionId}
-            onChange={(e) => setVersionId(e.target.value)}
-          />
-        </div>
+      </header>
 
-        <button 
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
-          onClick={handleFetchTimetable}
-          disabled={!selectedStudentId || !versionId || loading}
-        >
-          {loading ? 'Loading...' : 'View Timetable'}
-        </button>
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden min-h-[400px] relative">
+        {loading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+          </div>
+        ) : filteredTimetable ? (
+          <div className="p-6">
+            <TimetableGrid 
+              timetable={filteredTimetable}
+            />
+          </div>
+        ) : (
+          <div className="p-12 text-center text-slate-500">No timetable published yet.</div>
+        )}
       </div>
-
-      {error && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
-          {error}
-        </div>
-      )}
-
-      {assignments.length > 0 && (
-        <TimetableGrid timetable={mockTimetableVersion} />
-      )}
-      
-      {!loading && assignments.length === 0 && selectedStudentId && versionId && !error && (
-        <div className="p-8 text-center text-slate-500 border border-white/5 rounded-xl border-dashed">
-          No assignments found for this student in this timetable version.
-        </div>
-      )}
     </div>
   );
 }

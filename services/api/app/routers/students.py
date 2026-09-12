@@ -37,7 +37,7 @@ async def list_students(
 async def get_student_timetable(
     tenantId: UUID,
     studentId: UUID,
-    versionId: UUID = Query(..., description="The timetable version ID to fetch assignments for"),
+    version_id: UUID | None = Query(None, description="The timetable version ID to fetch assignments for. Defaults to the active published version."),
     db: AsyncSession = Depends(set_tenant_context),
     identity_id: UUID = Depends(verify_jwt),
     _role: None = Depends(require_role(["institution_admin", "department_head", "reviewer", "student"]))
@@ -63,10 +63,21 @@ async def get_student_timetable(
 
     # Fetch version state
     from app.models.timetable_version import TimetableVersion
-    tv_result = await db.execute(select(TimetableVersion).where(TimetableVersion.id == versionId))
+    if version_id:
+        tv_result = await db.execute(select(TimetableVersion).where(TimetableVersion.id == version_id))
+    else:
+        tv_result = await db.execute(
+            select(TimetableVersion)
+            .where(TimetableVersion.tenant_id == tenantId)
+            .where(TimetableVersion.state == 'published')
+            .order_by(TimetableVersion.version_no.desc())
+            .limit(1)
+        )
     tv = tv_result.scalar_one_or_none()
     if not tv:
-        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Version not found"}})
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Version not found or no published version exists"}})
+    
+    version_id = tv.id
 
     if tv.state not in ("published", "archived"):
         staff_res = await db.execute(
@@ -102,7 +113,7 @@ async def get_student_timetable(
 
     # Fetch dual-routed schedules
     from app.services.schedule_mapper import get_dual_routed_schedules
-    all_schedules = await get_dual_routed_schedules(db, versionId, tv.state, 'class')
+    all_schedules = await get_dual_routed_schedules(db, version_id, tv.state, 'class')
 
     from app.models.course import Course
     course_result = await db.execute(select(Course))

@@ -158,3 +158,46 @@ async def create_structured_rule(
     await db.refresh(rule)
     await db.commit()
     return rule
+
+@router.get("", response_model=list[ConstraintRuleResponse])
+async def list_rules(
+    tenantId: UUID,
+    db: AsyncSession = Depends(set_tenant_context),
+    identity_id: UUID = Depends(verify_jwt),
+    _: None = Depends(require_role(["institution_admin", "department_head", "reviewer"])),
+):
+    result = await db.execute(select(ConstraintRule).where(ConstraintRule.tenant_id == tenantId))
+    rules = result.scalars().all()
+    return rules
+
+@router.delete("/{ruleId}", status_code=204)
+async def delete_rule(
+    tenantId: UUID,
+    ruleId: UUID,
+    db: AsyncSession = Depends(set_tenant_context),
+    identity_id: UUID = Depends(verify_jwt),
+    _: None = Depends(require_role(["institution_admin", "department_head"])),
+):
+    result = await db.execute(select(ConstraintRule).where(ConstraintRule.id == ruleId))
+    rule = result.scalar_one_or_none()
+    if not rule:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Rule not found"}}
+        )
+    
+    # Audit log
+    audit = AuditLog(
+        tenant_id=tenantId,
+        actor_identity_id=identity_id,
+        action="delete_rule",
+        entity_type="constraint_rule",
+        entity_id=rule.id,
+        before={"status": rule.status, "rule_type": rule.rule_type},
+        after=None,
+        at=datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    db.add(audit)
+    
+    await db.delete(rule)
+    await db.commit()

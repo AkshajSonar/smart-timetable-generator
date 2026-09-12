@@ -27,5 +27,5 @@ class PublishedSchedule(Base, TenantMixin):
     room_name = Column(String, nullable=True)
     batch_name = Column(String, nullable=True)
     
-    slot_index = Column(Integer, nullable=False)
+    slot_start = Column(Integer, nullable=False)
     slot_span = Column(Integer, nullable=False, default=1)

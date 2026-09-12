@@ -454,3 +454,15 @@ async def confirm_substitution(
         substitution_id=substitutionId,
         new_version_no=new_version_no,
     )
+
+@router.get("")
+async def list_substitutions(
+    tenantId: UUID,
+    db: AsyncSession = Depends(set_tenant_context),
+    identity_id: UUID = Depends(verify_jwt),
+    _role: None = Depends(require_role(["institution_admin", "department_head"])),
+):
+    """List all substitutions."""
+    res = await db.execute(select(SubstitutionLog).order_by(SubstitutionLog.date.desc()))
+    items = list(res.scalars().all())
+    return {"items": items}

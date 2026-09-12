@@ -1,179 +1,159 @@
-/**
- * GeneratePage — tenant ID + cohort picker → generate timetable → show grid.
- * Phase 1: no auth, user supplies tenantId manually.
- */
-
-import { useState } from 'react';
-import { api, type TimetableVersion, type LoadVerificationReport } from '../api/client';
-import { TimetableGrid } from '../features/timetable-grid/TimetableGrid';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bot, CheckCircle2, Zap, Loader2 } from 'lucide-react';
 import { useTenant } from '../lib/TenantContext';
-
-type Status = 'idle' | 'loading-cohorts' | 'ready' | 'generating' | 'done' | 'error';
+import { api, type Department, type AcademicTerm } from '../api/client';
 
 export function GeneratePage() {
-  const { tenantId, termId, tenantName, loading: tenantLoading, setLastVersionId } = useTenant();
-  const [status, setStatus] = useState<Status>('idle');
-  const [error, setError] = useState('');
-  const [timetable, setTimetable] = useState<TimetableVersion | null>(null);
-  const [report, setReport] = useState<LoadVerificationReport | null>(null);
-  const [violations, setViolations] = useState<{ h_code: string; message: string }[]>([]);
-  const [generatedVersionId, setGeneratedVersionId] = useState<string>('');
+  const navigate = useNavigate();
+  const { tenantId, termId } = useTenant();
+  const [goal, setGoal] = useState('balanced');
+  
+  const [terms, setTerms] = useState<AcademicTerm[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedTerm, setSelectedTerm] = useState('');
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  async function generate() {
-    if (!tenantId || !termId) { setError('Tenant or Term not loaded yet — wait a moment.'); return; }
-    setStatus('generating');
-    setError('');
-    setTimetable(null);
-    setViolations([]);
-    try {
-      const genRes = await api.timetables.generate(tenantId, termId);
-      setGeneratedVersionId(genRes.timetable_version_id);
-      setLastVersionId(genRes.timetable_version_id); // share with other pages
-      
-      const tv = await api.timetables.get(tenantId, genRes.timetable_version_id);
-      setTimetable(tv);
-      setViolations(genRes.violations);
-      
+  useEffect(() => {
+    async function loadData() {
+      if (!tenantId) return;
       try {
-        const rep = await api.reports.getVerification(tenantId, genRes.timetable_version_id);
-        setReport(rep);
-      } catch (e) {
-        console.warn("Could not load report", e);
+        const [termRes, deptRes] = await Promise.all([
+          api.terms.list(tenantId),
+          api.departments.list(tenantId).catch(() => ({ items: [] as Department[] }))
+        ]);
+        setTerms(termRes.items);
+        setDepartments(deptRes.items);
+        
+        if (termRes.items.length > 0) {
+          setSelectedTerm(termId || termRes.items[0].id);
+        }
+        setSelectedDepts(deptRes.items.map(d => d.id));
+      } catch (err) {
+        console.error('Failed to load generate page data', err);
+      } finally {
+        setLoading(false);
       }
-      
-      setStatus('done');
-    } catch (e: unknown) {
-      setError((e as Error).message);
-      setStatus('error');
     }
-  }
+    loadData();
+  }, [tenantId, termId]);
 
-  const busy = status === 'generating' || tenantLoading;
+  const handleGenerate = () => {
+    navigate(`/progress?term=${selectedTerm}`);
+  };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-deep)' }}>
-      {/* Header */}
-      <header className="border-b px-8 py-5 flex items-center gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ background: 'var(--accent)' }}>
-          🗓
-        </div>
-        <div>
-          <h1 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Smart Timetable Generator
-          </h1>
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            {tenantName ? `Tenant: ${tenantName}` : 'Loading tenant...'} · CP-SAT solver · H1–H11 guaranteed conflict-free
-          </p>
-        </div>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Generate Timetable</h1>
+        <p className="text-slate-500">Let our scheduling brain create the perfect timetable for you.</p>
       </header>
 
-      <main className="max-w-6xl mx-auto px-8 py-10 space-y-8">
-        {/* Tenant info + generate */}
-        <section className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-            Generate Timetable
-          </h2>
-          <div className="flex gap-3 items-center">
-            <div className="flex-1 text-sm font-mono rounded-lg px-4 py-2.5" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              {tenantLoading ? 'Resolving tenant…' : (tenantId || 'No tenant found')}
+      <div className="flex flex-col lg:flex-row gap-8">
+        <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative min-h-[400px]">
+          {loading ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
             </div>
-            <button
-              id="generate-btn"
-              onClick={generate}
-              disabled={busy || !tenantId || !termId}
-              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
-              style={{ background: 'var(--accent)', color: '#fff' }}
-            >
-              {status === 'generating' && (
-                <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
-              {status === 'generating' ? 'Solving…' : '⚡ Generate Timetable'}
-            </button>
-          </div>
-        </section>
-
-        {/* Error */}
-        {status === 'error' && (
-          <div className="rounded-xl px-5 py-4 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
-            ⚠ {error}
-          </div>
-        )}
-
-        {/* Violations banner */}
-        {violations.length > 0 && (
-          <div className="rounded-xl px-5 py-4 text-sm space-y-1" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: '#fcd34d' }}>
-            <p className="font-semibold">⚠ Conflict checker found {violations.length} violation(s):</p>
-            {violations.map((v, i) => (
-              <p key={i} className="text-xs opacity-80">[{v.h_code}] {v.message}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Verification Report */}
-        {report && (
-          <section className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-              Load Verification Report
-            </h2>
-            <div className="grid grid-cols-2 gap-6">
+          ) : (
+            <div className="space-y-6">
               <div>
-                <h3 className="text-sm font-medium mb-2 text-emerald-400">Faculty Load</h3>
-                <ul className="space-y-1">
-                  {report.faculty_load.map(f => (
-                    <li key={f.id} className="text-xs flex justify-between" style={{ color: 'var(--text-primary)' }}>
-                      <span>{f.name}</span>
-                      <span className={f.difference !== 0 ? 'text-red-400' : 'text-emerald-400'}>
-                        {f.scheduled_hours}/{f.required_hours}h
-                      </span>
-                    </li>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Term</label>
+                <select 
+                  value={selectedTerm}
+                  onChange={(e) => setSelectedTerm(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-900 font-medium"
+                >
+                  {terms.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
-                </ul>
+                  {terms.length === 0 && <option>No terms available</option>}
+                </select>
               </div>
-              <div>
-                <h3 className="text-sm font-medium mb-2 text-emerald-400">Cohort Load</h3>
-                <ul className="space-y-1">
-                  {report.cohort_load.map(c => (
-                    <li key={c.id} className="text-xs flex justify-between" style={{ color: 'var(--text-primary)' }}>
-                      <span>{c.name}</span>
-                      <span className={c.difference !== 0 ? 'text-red-400' : 'text-emerald-400'}>
-                        {c.scheduled_hours}/{c.required_hours}h
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </section>
-        )}
 
-        {/* Timetable */}
-        {status === 'done' && timetable && (
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Generated Timetable
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                  State: <span className="font-medium text-emerald-400">{timetable.state}</span>
-                  {' · '}v{timetable.version_no}
-                  {' · '}
-                  {timetable.assignments.length} assignment{timetable.assignments.length !== 1 ? 's' : ''}
-                  {violations.length === 0 && (
-                    <span className="ml-2 text-emerald-400 font-medium">✓ No violations</span>
+                <label className="block text-sm font-medium text-slate-700 mb-3">Departments</label>
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {departments.length === 0 ? (
+                    <p className="text-sm text-slate-500">No departments found.</p>
+                  ) : (
+                    departments.map(dept => {
+                      const isSelected = selectedDepts.includes(dept.id);
+                      return (
+                        <label key={dept.id} className="flex items-center gap-3 cursor-pointer group" onClick={(e) => {
+                          e.preventDefault();
+                          if (isSelected) {
+                            setSelectedDepts(prev => prev.filter(id => id !== dept.id));
+                          } else {
+                            setSelectedDepts(prev => [...prev, dept.id]);
+                          }
+                        }}>
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? 'bg-indigo-600 border-indigo-600'
+                              : 'border-slate-300 group-hover:border-indigo-400'
+                          }`}>
+                            {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                          <span className="text-sm font-medium text-slate-700">{dept.name}</span>
+                        </label>
+                      );
+                    })
                   )}
-                </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-3">Optimization Goal</label>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer group" onClick={() => setGoal('balanced')}>
+                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center ${goal === 'balanced' ? 'border-indigo-600' : 'border-slate-300'}`}>
+                      {goal === 'balanced' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${goal === 'balanced' ? 'text-indigo-900' : 'text-slate-700'}`}>Balanced workload</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Prioritizes even distribution of classes across the week.</p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer group" onClick={() => setGoal('compact')}>
+                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center ${goal === 'compact' ? 'border-indigo-600' : 'border-slate-300'}`}>
+                      {goal === 'compact' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${goal === 'compact' ? 'text-indigo-900' : 'text-slate-700'}`}>Compact schedule</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Minimizes gaps between classes for students and faculty.</p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
-            {/* Version ID banner for easy copy-paste into other tabs */}
-            <div className="px-4 py-3 rounded-xl text-xs font-mono flex items-center gap-2 select-all" style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
-              <span className="font-sans font-semibold text-indigo-300">Version ID:</span>
-              {generatedVersionId}
+          )}
+        </div>
+
+        <div className="w-full lg:w-80 space-y-6">
+          <div className="bg-indigo-900 text-white p-6 rounded-2xl relative overflow-hidden shadow-sm">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
+            <div className="relative z-10">
+              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6">
+                <Bot className="w-6 h-6 text-indigo-300" />
+              </div>
+              <h3 className="font-bold text-lg mb-2">Ready to generate?</h3>
+              <p className="text-indigo-200 text-sm leading-relaxed mb-6">
+                Our CP-SAT solver will analyze all hard and soft constraints to produce the optimal conflict-free schedule.
+              </p>
+              <button 
+                onClick={handleGenerate}
+                disabled={loading || selectedDepts.length === 0}
+                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-indigo-50 text-indigo-900 font-bold py-3 rounded-xl transition-colors shadow-lg disabled:opacity-50"
+              >
+                <Zap className="w-4 h-4 text-yellow-500" />
+                Start Generation
+              </button>
             </div>
-            <TimetableGrid timetable={timetable} />
-          </section>
-        )}
-      </main>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

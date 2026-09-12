@@ -25,7 +25,7 @@ async def _check_tenant_membership(
 ) -> None:
     """Validates the JWT's identity_id against staff_profile/student_profile at this tenant."""
     staff_result = await db.execute(select(StaffProfile.id).where(StaffProfile.identity_id == identity_id, StaffProfile.tenant_id == tenantId))
-    has_staff = staff_result.scalar_one_or_none() is not None
+    has_staff = staff_result.scalars().first() is not None
 
     is_authorized = has_staff
     if not is_authorized:

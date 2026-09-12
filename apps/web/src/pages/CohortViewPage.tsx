@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { api, type TimetableVersion, type StaffProfile } from '../../api/client';
-import { TimetableGrid } from '../timetable-grid/TimetableGrid';
-import { useTenant } from '../../lib/TenantContext';
+import { api, type TimetableVersion, type Cohort } from '../api/client';
+import { TimetableGrid } from '../features/timetable-grid/TimetableGrid';
+import { useTenant } from '../lib/TenantContext';
 import { Loader2 } from 'lucide-react';
 
-export function FacultyViewPage() {
+export function CohortViewPage() {
   const { tenantId, lastVersionId } = useTenant();
   const [timetable, setTimetable] = useState<TimetableVersion | null>(null);
-  const [facultyList, setFacultyList] = useState<StaffProfile[]>([]);
-  const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
+  const [cohorts, setCohorts] = useState<Cohort[]>([]);
+  const [selectedCohortId, setSelectedCohortId] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -16,14 +16,18 @@ export function FacultyViewPage() {
       if (!tenantId || !lastVersionId) return;
       setLoading(true);
       try {
-        const [fullTimetable, facultyRes] = await Promise.all([
-          api.timetables.get(tenantId, lastVersionId),
-          api.faculty.list(tenantId)
-        ]);
+        const fullTimetable = await api.timetables.get(tenantId, lastVersionId);
         setTimetable(fullTimetable);
-        setFacultyList(facultyRes.items);
-        if (facultyRes.items.length > 0) {
-          setSelectedFacultyId(facultyRes.items[0].id);
+        // We do not have api.cohorts in client.ts right now.
+        // We will mock them by extracting from timetable assignments for now.
+        const cohortMap = new Map<string, string>();
+        for (const a of fullTimetable.assignments) {
+          cohortMap.set(a.cohort_id, `Cohort ${a.cohort_id.substring(0,6)}`);
+        }
+        const extracted = Array.from(cohortMap.entries()).map(([id, name]) => ({ id, name, type: 'fixed' }));
+        setCohorts(extracted as any);
+        if (extracted.length > 0) {
+          setSelectedCohortId(extracted[0].id);
         }
       } catch (err) {
         console.error(err);
@@ -36,24 +40,24 @@ export function FacultyViewPage() {
 
   const filteredTimetable = timetable ? {
     ...timetable,
-    assignments: timetable.assignments.filter(a => a.staff_profile_id === selectedFacultyId)
+    assignments: timetable.assignments.filter(a => a.cohort_id === selectedCohortId)
   } : null;
 
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">My Schedule (Faculty)</h1>
-          <p className="text-slate-500">View your teaching schedule and assignments.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Cohort Timetable</h1>
+          <p className="text-slate-500">View the unified schedule for a specific cohort.</p>
         </div>
         <div className="flex items-center gap-4">
           <select 
-            value={selectedFacultyId}
-            onChange={(e) => setSelectedFacultyId(e.target.value)}
+            value={selectedCohortId}
+            onChange={(e) => setSelectedCohortId(e.target.value)}
             className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm"
           >
-            {facultyList.map(f => (
-              <option key={f.id} value={f.id}>{f.name || 'Unnamed Faculty'}</option>
+            {cohorts.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">

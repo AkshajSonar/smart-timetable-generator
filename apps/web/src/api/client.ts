@@ -3,9 +3,11 @@
  * Base URL defaults to the Vite dev proxy (same origin) or VITE_API_URL env var.
  */
 
-let bearerToken: string | null = null;
+let bearerToken: string | null = localStorage.getItem('schedulr_token');
 export function setBearerToken(token: string | null) {
   bearerToken = token;
+  if (token) localStorage.setItem('schedulr_token', token);
+  else localStorage.removeItem('schedulr_token');
 }
 export function getBearerToken() {
   return bearerToken;
@@ -101,6 +103,59 @@ export interface PaginatedResponse<T> {
   next_cursor: string | null;
 }
 
+export interface Department {
+  id: string;
+  tenant_id: string;
+  name: string;
+}
+
+export interface Room {
+  id: string;
+  tenant_id: string;
+  campus_id: string | null;
+  name: string;
+  type: string;
+  capacity: number;
+  equipment_tags: string[];
+  accessible: boolean;
+}
+
+export interface Course {
+  id: string;
+  tenant_id: string;
+  department_id: string;
+  name: string;
+  type: 'core' | 'elective' | 'lab';
+  credit_value: number;
+  hours_per_week: number;
+  block_size: number;
+}
+
+export interface StaffProfile {
+  id: string;
+  identity_id: string;
+  tenant_id: string;
+  employment_type: string;
+  workload_cap_week: number;
+  workload_cap_day: number;
+  roles: string[];
+}
+
+export interface Rule {
+  id: string;
+  tenant_id: string;
+  rule_type: string;
+  scope: string;
+  target_id: string | null;
+  threshold: number | null;
+  unit: string | null;
+  polarity: string | null;
+  weight: number | null;
+  source: 'structured' | 'nl';
+  raw_input_text: string | null;
+  status: 'pending_confirmation' | 'confirmed';
+}
+
 // ── API calls ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -137,11 +192,12 @@ export const api = {
     parse: (tenantId: string, rawInputText: string) =>
       request<any>(`/api/v1/tenants/${tenantId}/rules/parse`, {
         method: 'POST',
-        body: JSON.stringify({ raw_input_text: rawInputText }),
+        body: JSON.stringify({ text: rawInputText }),
       }),
     confirm: (tenantId: string, ruleId: string) =>
       request(`/api/v1/tenants/${tenantId}/rules/${ruleId}/confirm`, {
         method: 'POST',
+        body: JSON.stringify({}),
       }),
     create: (tenantId: string, data: any) =>
       request(`/api/v1/tenants/${tenantId}/rules`, {
@@ -151,26 +207,68 @@ export const api = {
   },
   staff: {
     list: (tenantId: string) =>
-      request<PaginatedResponse<any>>(`/api/v1/tenants/${tenantId}/staff-profiles?limit=500`),
+      request<PaginatedResponse<StaffProfile>>(`/api/v1/tenants/${tenantId}/staff-profiles?limit=500`),
+    create: (tenantId: string, data: Partial<StaffProfile>) =>
+      request<StaffProfile>(`/api/v1/tenants/${tenantId}/staff-profiles`, { method: 'POST', body: JSON.stringify(data) }),
     getTimetable: (tenantId: string, staffId: string, versionId?: string) => {
       const qs = versionId ? `?version_id=${versionId}` : '';
       return request<Assignment[]>(`/api/v1/tenants/${tenantId}/staff-profiles/${staffId}/timetable${qs}`);
     },
   },
+  courses: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<Course>>(`/api/v1/tenants/${tenantId}/courses?limit=500`),
+    create: (tenantId: string, data: Partial<Course>) =>
+      request<Course>(`/api/v1/tenants/${tenantId}/courses`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  rooms: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<Room>>(`/api/v1/tenants/${tenantId}/rooms?limit=500`),
+    create: (tenantId: string, data: Partial<Room>) =>
+      request<Room>(`/api/v1/tenants/${tenantId}/rooms`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  departments: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<Department>>(`/api/v1/tenants/${tenantId}/departments?limit=500`),
+    create: (tenantId: string, data: Partial<Department>) =>
+      request<Department>(`/api/v1/tenants/${tenantId}/departments`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  students: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<any>>(`/api/v1/tenants/${tenantId}/student-profiles?limit=500`),
+  },
   terms: {
     list: (tenantId: string) =>
       request<PaginatedResponse<AcademicTerm>>(`/api/v1/tenants/${tenantId}/terms?limit=10`),
-    getFirst: async (tenantId: string): Promise<AcademicTerm | null> => {
+    getFirst: async (tenantId: string) => {
       const res = await request<PaginatedResponse<AcademicTerm>>(`/api/v1/tenants/${tenantId}/terms?limit=1`);
-      return res.items[0] ?? null;
+      return res.items[0] || null;
     },
+  },
+  rules: {
+    list: (tenantId: string) =>
+      request<Rule[]>(`/api/v1/tenants/${tenantId}/rules`),
+    parse: (tenantId: string, text: string) =>
+      request<any>(`/api/v1/tenants/${tenantId}/rules/parse`, { method: 'POST', body: JSON.stringify({ text }) }),
+    confirm: (tenantId: string, ruleId: string, data: any) =>
+      request<Rule>(`/api/v1/tenants/${tenantId}/rules/${ruleId}/confirm`, { method: 'POST', body: JSON.stringify(data) }),
+    create: (tenantId: string, data: Partial<Rule>) =>
+      request<Rule>(`/api/v1/tenants/${tenantId}/rules`, { method: 'POST', body: JSON.stringify(data) }),
+    delete: (tenantId: string, ruleId: string) =>
+      request<void>(`/api/v1/tenants/${tenantId}/rules/${ruleId}`, { method: 'DELETE' }),
   },
   reports: {
     getVerification: (tenantId: string, versionId: string) =>
       request<LoadVerificationReport>(`/api/v1/tenants/${tenantId}/reports/verification?version_id=${versionId}`),
+    getRoomUtilization: (tenantId: string, versionId: string) =>
+      request<any>(`/api/v1/tenants/${tenantId}/reports/room-utilization?version_id=${versionId}`),
   },
   users: {
     getTenants: () =>
       request<{ tenants: { id: string; name: string }[] }>(`/api/v1/me/tenants`),
+  },
+  substitutions: {
+    list: (tenantId: string) => 
+      request<{ items: any[] }>(`/api/v1/tenants/${tenantId}/substitutions`),
   }
 };

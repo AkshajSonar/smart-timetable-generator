@@ -138,7 +138,7 @@ async def what_if_simulation(
             course_name=courses[course_id].name if course_id in courses else None,
             room_name=rooms[room_id].name if room_id in rooms else None,
             batch_name=batches[batch_id].label if batch_id and batch_id in batches else None,
-            slot_index=a.slot_index,
+            slot_start=a.slot_index,
             slot_span=a.slot_span,
             is_locked=False
         ))
@@ -175,7 +175,8 @@ async def get_timetable_version(
         tenant_id=tv.tenant_id,
         state=tv.state,
         version_no=tv.version_no,
-        schedules=schedules,
+        approved_by=tv.approved_by,
+        assignments=schedules,
     )
 
 
@@ -358,7 +359,7 @@ async def publish_timetable(
             course_name=course_name,
             room_name=room_name,
             batch_name=batch_name,
-            slot_index=assign.slot_start,
+            slot_start=assign.slot_start,
             slot_span=assign.slot_span
         )
         db.add(published_row)

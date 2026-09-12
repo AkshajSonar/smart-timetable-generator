@@ -53,9 +53,11 @@ async def _get_user_roles(
             StaffProfile.tenant_id == tenantId
         )
     )
-    staff_roles = staff_result.scalar_one_or_none()
-    if staff_roles:
-        user_roles.update(staff_roles)
+    # Fetch all matching staff profiles and aggregate roles
+    staff_roles_list = staff_result.scalars().all()
+    for staff_roles in staff_roles_list:
+        if staff_roles:
+            user_roles.update(staff_roles)
         
     return user_roles
 
