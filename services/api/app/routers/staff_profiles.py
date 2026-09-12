@@ -106,12 +106,35 @@ async def list_staff_profiles(
     db: AsyncSession = Depends(set_tenant_context),
     _role: None = Depends(require_role(["institution_admin", "department_head"]))
 ):
-    q = select(StaffProfile).order_by(StaffProfile.id).limit(limit + 1)
+    from app.models.identity import Identity
+    
+    q = (
+        select(StaffProfile, Identity.full_name, Identity.email)
+        .join(Identity, StaffProfile.identity_id == Identity.id)
+        .order_by(StaffProfile.id)
+        .limit(limit + 1)
+    )
     if cursor:
         from uuid import UUID as _UUID
         q = q.where(StaffProfile.id > _UUID(cursor))
+        
     result = await db.execute(q)
-    items = list(result.scalars().all())
+    rows = result.all()
+    
+    items = []
+    for sp, fname, email in rows:
+        items.append(StaffProfileRead(
+            id=sp.id,
+            tenant_id=sp.tenant_id,
+            identity_id=sp.identity_id,
+            employment_type=sp.employment_type,
+            workload_cap_week=sp.workload_cap_week,
+            workload_cap_day=sp.workload_cap_day,
+            roles=sp.roles,
+            full_name=fname,
+            email=email
+        ))
+        
     next_cursor = str(items[-1].id) if len(items) > limit else None
     return PaginatedResponse(items=items[:limit], next_cursor=next_cursor)
 

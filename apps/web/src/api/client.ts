@@ -136,12 +136,14 @@ export interface Course {
 
 export interface StaffProfile {
   id: string;
-  identity_id: string;
   tenant_id: string;
-  employment_type: string;
+  identity_id: string;
+  employment_type: 'full_time' | 'part_time' | 'visiting';
   workload_cap_week: number;
   workload_cap_day: number;
   roles: string[];
+  full_name?: string;
+  email?: string;
 }
 
 export interface Rule {
@@ -242,10 +244,6 @@ export const api = {
       request<PaginatedResponse<Department>>(`/api/v1/tenants/${tenantId}/departments?limit=500`),
     create: (tenantId: string, data: Partial<Department>) =>
       request<Department>(`/api/v1/tenants/${tenantId}/departments`, { method: 'POST', body: JSON.stringify(data) }),
-  },
-  students: {
-    list: (tenantId: string) =>
-      request<PaginatedResponse<any>>(`/api/v1/tenants/${tenantId}/student-profiles?limit=500`),
   },
   terms: {
     list: (tenantId: string) =>

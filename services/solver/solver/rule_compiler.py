@@ -25,8 +25,8 @@ class CompiledRules:
     
     no_consecutive_same_course_weight: int | None = None
     
-    preferred_time_of_day_weight: int | None = None
-    preferred_time_of_day_unit: str | None = None
+    # Store list of (target_id, unit, polarity, weight)
+    preferred_time_of_day_rules: list[tuple[str | None, str | None, str | None, int | None]] = field(default_factory=list)
     
     balance_load_across_week_weight: int | None = None
     
@@ -104,8 +104,9 @@ def compile_constraint_rules(inp: SolverInput) -> CompiledRules:
             
         # preferred_time_of_day
         elif rule.rule_type == "preferred_time_of_day":
-            compiled.preferred_time_of_day_weight = int(rule_weight)
-            compiled.preferred_time_of_day_unit = rule.unit
+            compiled.preferred_time_of_day_rules.append(
+                (rule.target_id, rule.unit, rule.polarity, int(rule_weight))
+            )
             
         # balance_load_across_week
         elif rule.rule_type == "balance_load_across_week":

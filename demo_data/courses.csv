@@ -1,0 +1,7 @@
+external_id,name,department,type,credit_value,hours_per_week,block_size
+CS101,Intro to Computer Science,Computer Science,core,4,4,2
+CS201,Data Structures & Algorithms,Computer Science,core,4,4,1
+CS405,Machine Learning,Computer Science,elective,3,3,1
+PHY101,Classical Mechanics,Physics,core,4,4,2
+PHY101L,Physics Lab I,Physics,lab,2,3,3
+MATH201,Linear Algebra,Mathematics,core,3,3,1

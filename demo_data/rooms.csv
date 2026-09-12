@@ -1,0 +1,6 @@
+external_id,name,type,capacity,equipment_tags,campus,accessible
+RM101,Turing Lecture Hall,lecture,120,projector;whiteboard;av_system,Main Campus,true
+LB201,Advanced Computing Lab,lab,40,computers;projector,Main Campus,true
+RM102,Feynman Seminar Room,seminar,30,whiteboard,Main Campus,true
+LB202,Applied Physics Lab,lab,35,lab_equipment;whiteboard,Main Campus,false
+RM103,Curie Classroom,lecture,60,projector;smartboard,North Campus,true

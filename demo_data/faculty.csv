@@ -1,0 +1,6 @@
+external_id,full_name,email,department,employment_type,workload_cap_week,workload_cap_day
+FAC001,Dr. Vedant Kulkarni,vedant.kulkarni@timetable.local,Computer Science,full_time,40,8
+FAC002,Dr. Akshaj Sonar,akshaj.sonar@timetable.local,Computer Science,full_time,40,8
+FAC003,Prof. Kuber Khandare,Kuber.Khandare@timetable.local,Physics,part_time,20,6
+FAC004,Dr. Varun Baisane,Varun.Baisane@timetable.local,Chemistry,full_time,40,8
+FAC005,Dr. Devang Vaishnav,Devang.Vaishnav@timetable.local,Mathematics,full_time,40,8

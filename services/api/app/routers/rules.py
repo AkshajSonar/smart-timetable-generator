@@ -32,11 +32,14 @@ async def parse_nl_rule(
     # Call the LLM
     parsed = await parse_rule_nl(body.text)
     
+    # Save the original string before validation overwrites it with a UUID
+    original_target = parsed.target_id
+    
     # Validate structure/semantics
     validated = await validate_and_resolve_rule(db, tenantId, parsed)
     
     # Template deterministic confirmation text
-    confirmation_text = render_confirmation_text(validated, body.text)
+    confirmation_text = render_confirmation_text(validated, body.text, original_target)
     
     # Persist row as pending_confirmation
     rule = ConstraintRule(

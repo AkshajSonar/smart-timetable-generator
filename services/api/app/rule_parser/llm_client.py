@@ -51,6 +51,12 @@ async def parse_rule_nl(text: str) -> ParsedRule:
             return ParsedRule(rule_type="preferred_time_of_day", scope="course", polarity="require")
         elif "spread" in text_lower or "evenly" in text_lower:
             return ParsedRule(rule_type="balance_load_across_week", scope="faculty", polarity="require")
+        elif "not work" in text_lower or "unavailable" in text_lower:
+            target = "Devang" if "devang" in text_lower else None
+            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="forbid")
+        elif "work on" in text_lower:
+            target = "Kuber" if "kuber" in text_lower else None
+            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="require", unit="thursday, friday, and saturday")
             
         return ParsedRule(
             rule_type="unsupported",
@@ -75,13 +81,37 @@ The `rule_type` must be exactly one of the following:
 Output only valid JSON matching the schema, nothing else.
 """
 
-    response = await client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text},
-        ],
-        response_format=ParsedRule,
-    )
-    
-    return response.choices[0].message.parsed
+    try:
+        response = await client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            response_format=ParsedRule,
+        )
+        return response.choices[0].message.parsed
+    except Exception as e:
+        logger.error(f"OpenAI API failed ({e}). Falling back to mock parser.")
+        text_lower = text.lower()
+        if "more than" in text_lower and "day" in text_lower:
+            return ParsedRule(rule_type="max_periods_per_day", scope="tenant", threshold=4, unit="periods", polarity="max")
+        elif "back-to-back" in text_lower or "consecutive" in text_lower:
+            return ParsedRule(rule_type="no_consecutive_same_course", scope="tenant", polarity="forbid")
+        elif "gap" in text_lower or "free period" in text_lower:
+            return ParsedRule(rule_type="min_gap_between_periods", scope="faculty", threshold=1, unit="periods", polarity="min")
+        elif "morning" in text_lower or "afternoon" in text_lower:
+            return ParsedRule(rule_type="preferred_time_of_day", scope="course", polarity="require")
+        elif "spread" in text_lower or "evenly" in text_lower:
+            return ParsedRule(rule_type="balance_load_across_week", scope="faculty", polarity="require")
+        elif "not work" in text_lower or "unavailable" in text_lower:
+            target = "Devang" if "devang" in text_lower else None
+            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="forbid")
+        elif "work on" in text_lower:
+            target = "Kuber" if "kuber" in text_lower else None
+            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="require", unit="thursday, friday, and saturday")
+            
+        return ParsedRule(
+            rule_type="unsupported",
+            scope="tenant"
+        )

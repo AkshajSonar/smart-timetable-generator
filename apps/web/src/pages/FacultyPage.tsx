@@ -7,12 +7,6 @@ function generateAvatar(id: string) {
   return id.charAt(0).toUpperCase();
 }
 
-function generateName(id: string) {
-  // Deterministic mock name based on UUID for demo purposes since full_name is in Identity table
-  const names = ['Sarah Johnson', 'Amit Sharma', 'Priya Mehta', 'Rohit Verma', 'Neha Singh', 'Karan Patel', 'Alice Admin', 'David DeptHead'];
-  const num = parseInt(id.replace(/-/g, '').substring(0, 8), 16);
-  return 'Dr. ' + names[num % names.length];
-}
 
 export function FacultyPage() {
   const { tenantId } = useTenant();
@@ -36,7 +30,7 @@ export function FacultyPage() {
   }, [tenantId]);
 
   const filteredFaculty = faculty.filter(f => {
-    const name = generateName(f.identity_id);
+    const name = f.full_name || 'Unknown';
     if (search && !name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -93,7 +87,7 @@ export function FacultyPage() {
                   </tr>
                 ) : (
                   filteredFaculty.map((f) => {
-                    const name = generateName(f.identity_id);
+                    const name = f.full_name || 'Unknown';
                     return (
                       <tr key={f.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4">

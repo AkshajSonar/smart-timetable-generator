@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Building2, GraduationCap, Library, ArrowRight, CheckCircle2, Upload, FileSpreadsheet, Download, AlertCircle, Loader2 } from 'lucide-react';
 import { useTenant } from '../lib/TenantContext';
 import { api } from '../api/client';
 
 export function SetupWizardPage() {
+  const navigate = useNavigate();
   const { tenantId } = useTenant();
   const [step, setStep] = useState(1);
   const [institutionType, setInstitutionType] = useState<string | null>('college');
@@ -265,7 +267,7 @@ export function SetupWizardPage() {
               Back
             </button>
             <button
-              onClick={() => alert("Setup and Master Data complete!")}
+              onClick={() => navigate('/dashboard')}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm"
             >
               Complete Setup <CheckCircle2 className="w-4 h-4" />

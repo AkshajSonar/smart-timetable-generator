@@ -18,7 +18,7 @@ async def validate_and_resolve_rule(
     if parsed_rule.rule_type == "unsupported":
         raise HTTPException(
             status_code=422,
-            detail="Unsupported rule type. Please use the structured form.",
+            detail={"error": {"code": "VALIDATION_ERROR", "message": "Unsupported rule type. Please use the structured form."}},
         )
 
     resolved_target_id = None
@@ -31,7 +31,7 @@ async def validate_and_resolve_rule(
             q = await db.execute(select(Department).where(Department.name.ilike(f"%{target}%")))
             dept = q.scalars().first()
             if not dept:
-                raise HTTPException(status_code=422, detail=f"Department '{target}' not found.")
+                raise HTTPException(status_code=422, detail={"error": {"code": "VALIDATION_ERROR", "message": f"Department '{target}' not found."}})
             resolved_target_id = str(dept.id)
             
         elif parsed_rule.scope == "faculty":
@@ -43,21 +43,21 @@ async def validate_and_resolve_rule(
             )
             staff = q.scalars().first()
             if not staff:
-                raise HTTPException(status_code=422, detail=f"Faculty '{target}' not found.")
+                raise HTTPException(status_code=422, detail={"error": {"code": "VALIDATION_ERROR", "message": f"Faculty '{target}' not found."}})
             resolved_target_id = str(staff.id)
             
         elif parsed_rule.scope == "course":
             q = await db.execute(select(Course).where(Course.name.ilike(f"%{target}%")))
             course = q.scalars().first()
             if not course:
-                raise HTTPException(status_code=422, detail=f"Course '{target}' not found.")
+                raise HTTPException(status_code=422, detail={"error": {"code": "VALIDATION_ERROR", "message": f"Course '{target}' not found."}})
             resolved_target_id = str(course.id)
             
         elif parsed_rule.scope == "cohort":
             q = await db.execute(select(Cohort).where(Cohort.name.ilike(f"%{target}%")))
             cohort = q.scalars().first()
             if not cohort:
-                raise HTTPException(status_code=422, detail=f"Cohort '{target}' not found.")
+                raise HTTPException(status_code=422, detail={"error": {"code": "VALIDATION_ERROR", "message": f"Cohort '{target}' not found."}})
             resolved_target_id = str(cohort.id)
             
         parsed_rule.target_id = resolved_target_id

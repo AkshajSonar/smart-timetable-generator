@@ -110,3 +110,68 @@ def add_elective_no_overlap_core_penalty(
         return sum(penalties) * weight
     return None
 
+def add_s5_minimize_same_course_twice_in_day(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+    compiled: 'CompiledRules',
+):
+    """S5: Minimize same-course-twice-in-one-day unless load requires it."""
+    weight = compiled.no_consecutive_same_course_weight if compiled.no_consecutive_same_course_weight is not None else 20
+    penalties = []
+    
+    # Group variables by (c, k, b)
+    units_by_day = {}
+    for (f, c, k, b, r, s), v in assign.items():
+        # Find which day this slot belongs to
+        day = next((d for d, slots in inp.slots_per_day.items() if s in slots), None)
+        if day is not None:
+            units_by_day.setdefault((c, k, b, day), []).append(v)
+            
+    for (c, k, b, day), vars_in_day in units_by_day.items():
+        if len(vars_in_day) > 1:
+            # We want to penalize sum(vars_in_day) - 1 if > 0
+            # Let excess >= 0
+            excess = model.NewIntVar(0, len(vars_in_day), f"s5_excess_{c}_{k}_{b}_{day}")
+            model.Add(excess >= sum(vars_in_day) - 1)
+            penalties.append(excess)
+            
+    if penalties:
+        return sum(penalties) * weight
+    return None
+
+def add_s8_preferred_time_of_day(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+    compiled: 'CompiledRules',
+):
+    """S8: Respect individual faculty time-of-day preferences (soft requires)."""
+    day_name_to_int = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6
+    }
+    
+    penalties = []
+    for (target_id, unit, polarity, weight) in compiled.preferred_time_of_day_rules:
+        # Hard forbids are handled in model.py. Here we only penalize missed "require" preferences.
+        if polarity == "require" and unit and target_id:
+            w = weight if weight is not None else 20
+            day_int = day_name_to_int.get(unit.lower())
+            if day_int is not None and day_int in inp.slots_per_day:
+                preferred_slots = set(inp.slots_per_day[day_int])
+                
+                # We penalize assignments that are NOT in the preferred slots for this faculty.
+                for (fv, c, k, b, r, sv), v in assign.items():
+                    if fv == target_id and sv not in preferred_slots:
+                        # Add a soft penalty for every block scheduled on a non-preferred day
+                        penalties.append(v * w)
+                        
+    if penalties:
+        return sum(penalties)
+    return None

@@ -14,6 +14,7 @@ import asyncio
 import os
 import sys
 import datetime
+import uuid
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -68,7 +69,8 @@ async def seed_demo_dataset():
                 admin_id = identity.id
 
         # ── Tenant ────────────────────────────────────────────────────────────────
-        tenant = Tenant(name="Demo University", institution_type="university", isolation_mode="row")
+        t_id = uuid.uuid4()
+        tenant = Tenant(id=t_id, tenant_id=t_id, name="Demo University", institution_type="university", isolation_mode="row")
         session.add(tenant)
         await session.flush()
 

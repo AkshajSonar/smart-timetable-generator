@@ -5,7 +5,7 @@ import { setBearerToken } from '../api/client';
 const keycloak = new Keycloak({
   url: 'http://localhost:8080',
   realm: 'timetable',
-  clientId: 'timetable-web'
+  clientId: 'timetable-frontend'
 });
 
 interface KeycloakProviderProps {

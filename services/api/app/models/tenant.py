@@ -10,6 +10,7 @@ class Tenant(Base):
     __tablename__ = "tenant"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    tenant_id = Column(UUID(as_uuid=True), nullable=True)
     name = Column(String, nullable=False)
     institution_type = Column(String, nullable=False)  # school|college|university|coaching
     timezone = Column(String, nullable=False, server_default="UTC")

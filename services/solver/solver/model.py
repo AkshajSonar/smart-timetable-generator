@@ -277,6 +277,34 @@ def build_h11_no_student_double_booking(
                 model.Add(sum(student_vars_at_slot) <= 1)
 
 
+def build_h_forbidden_time_of_day(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+    compiled: 'CompiledRules',
+):
+    """Enforce hard 'forbid' rules for preferred_time_of_day.
+    If polarity is 'forbid' and unit is a day name, faculty cannot be assigned any slots on that day.
+    """
+    day_name_to_int = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6
+    }
+    
+    for (target_id, unit, polarity, weight) in compiled.preferred_time_of_day_rules:
+        if polarity == "forbid" and unit and target_id:
+            day_int = day_name_to_int.get(unit.lower())
+            if day_int is not None and day_int in inp.slots_per_day:
+                forbidden_slots = set(inp.slots_per_day[day_int])
+                for (fv, c, k, b, r, sv), v in assign.items():
+                    if fv == target_id and sv in forbidden_slots:
+                        model.Add(v == 0)
+
 # ---------- Exam Builder functions (Phase 4) ----------
 
 
@@ -450,6 +478,7 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     build_h9_room_type_match()  # by construction
     build_h10_shared_lab_capacity(model, assign, inp, courses_by_id)
     build_h11_no_student_double_booking(model, assign, inp, courses_by_id)
+    build_h_forbidden_time_of_day(model, assign, inp, compiled)
 
     # Enforce locked assignments (FR-9.2)
     for locked in inp.locked_assignments:
@@ -464,6 +493,14 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     pen_overlap = obj.add_elective_no_overlap_core_penalty(model, assign, inp, compiled)
     if pen_overlap is not None:
         penalties.append(pen_overlap)
+        
+    pen_s5 = obj.add_s5_minimize_same_course_twice_in_day(model, assign, inp, compiled)
+    if pen_s5 is not None:
+        penalties.append(pen_s5)
+        
+    pen_s8 = obj.add_s8_preferred_time_of_day(model, assign, inp, compiled)
+    if pen_s8 is not None:
+        penalties.append(pen_s8)
         
     if penalties:
         model.Minimize(sum(penalties))

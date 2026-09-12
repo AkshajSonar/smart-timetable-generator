@@ -42,5 +42,7 @@ class StaffProfileRead(BaseModel):
     workload_cap_week: int
     workload_cap_day: int
     roles: list[str]
+    full_name: Optional[str] = None
+    email: Optional[str] = None
 
     model_config = {"from_attributes": True}

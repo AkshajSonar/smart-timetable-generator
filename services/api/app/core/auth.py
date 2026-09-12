@@ -70,27 +70,24 @@ async def verify_jwt(
     identity = result.scalars().first()
 
     if not identity:
-        # Check for collision by email (stub identity pending first login)
+        # Check for collision by email
         if email:
             result_email = await db.execute(
-                select(Identity).where(
-                    Identity.email == email,
-                    Identity.auth_provider_ref == None
-                )
+                select(Identity).where(Identity.email == email)
             )
             identity = result_email.scalars().first()
 
         if identity:
-            # Stub found, link it
-            identity.auth_provider_ref = str(identity_id)
-            # If Keycloak provides a full_name that we don't have, we could populate it here
-            await db.commit()
+            # Identity found by email. 
+            # In a demo environment, this allows Keycloak's dynamic UUIDs 
+            # to map to our seeded data's static UUIDs.
+            pass
         else:
             # No stub found, create a new one
             identity = Identity(
                 id=identity_id,
                 email=email or f"{identity_id}@unknown",
-                auth_provider_ref="keycloak", # original default, though str(identity_id) is better, but preserving behavior
+                auth_provider_ref="keycloak",
                 platform_role=None  # Explicitly None
             )
             db.add(identity)
