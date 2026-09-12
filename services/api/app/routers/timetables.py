@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -178,6 +178,138 @@ async def get_timetable_version(
         approved_by=tv.approved_by,
         assignments=schedules,
     )
+
+
+@router.get("/{versionId}/export")
+async def export_timetable(
+    tenantId: UUID,
+    versionId: UUID,
+    format: str = Query("csv", pattern="^(csv|ics|pdf)$"),
+    db: AsyncSession = Depends(set_tenant_context),
+    _role: set[str] = Depends(require_role(["institution_admin", "department_head", "reviewer", "faculty", "student"]))
+):
+    """FR-8.3: Export timetable to CSV, ICS, or PDF/Printable HTML format."""
+    tv_result = await db.execute(select(TimetableVersion).where(TimetableVersion.id == versionId))
+    tv = tv_result.scalar_one_or_none()
+    if not tv:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Timetable version not found"}})
+
+    from app.services.schedule_mapper import get_dual_routed_schedules
+    assignments = await get_dual_routed_schedules(db, versionId, tv.state, 'class')
+
+    DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    PERIODS_PER_DAY = 6
+
+    if format == "csv":
+        import io
+        import csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Weekday", "Period", "Slot Start", "Course Name", "Cohort", "Faculty Name", "Room Name", "Batch"])
+        
+        for a in assignments:
+            day_idx = a.slot_start // PERIODS_PER_DAY
+            period_idx = a.slot_start % PERIODS_PER_DAY
+            day_name = DAYS[day_idx] if day_idx < len(DAYS) else f"Day {day_idx+1}"
+            writer.writerow([
+                day_name,
+                f"P{period_idx + 1}",
+                a.slot_start,
+                a.course_name or str(a.course_id),
+                a.cohort_name or str(a.cohort_id),
+                a.staff_name or str(a.staff_profile_id),
+                a.room_name or str(a.room_id),
+                a.batch_name or ""
+            ])
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="timetable_{versionId}.csv"'}
+        )
+
+    elif format == "ics":
+        ics_lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Schedulr//Smart Timetable Generator//EN",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+        ]
+        for a in assignments:
+            day_idx = a.slot_start // PERIODS_PER_DAY
+            period_idx = a.slot_start % PERIODS_PER_DAY
+            day_abbr = ['MO','TU','WE','TH','FR'][min(day_idx, 4)]
+            summary = f"{a.course_name or 'Course'} ({a.cohort_name or 'Cohort'})"
+            description = f"Faculty: {a.staff_name or 'TBA'}, Batch: {a.batch_name or 'All'}"
+            location = a.room_name or "Assigned Room"
+            
+            ics_lines.extend([
+                "BEGIN:VEVENT",
+                f"UID:{a.id}@schedulr.app",
+                f"SUMMARY:{summary}",
+                f"LOCATION:{location}",
+                f"DESCRIPTION:{description}",
+                f"RRULE:FREQ=WEEKLY;BYDAY={day_abbr}",
+                "END:VEVENT"
+            ])
+        ics_lines.append("END:VCALENDAR")
+        return Response(
+            content="\r\n".join(ics_lines),
+            media_type="text/calendar",
+            headers={"Content-Disposition": f'attachment; filename="timetable_{versionId}.ics"'}
+        )
+
+    elif format == "pdf":
+        html_rows = "".join([
+            f"<tr style='border-bottom:1px solid #e2e8f0;'><td style='padding:8px;'>{DAYS[min(a.slot_start // PERIODS_PER_DAY, 4)]}</td>"
+            f"<td style='padding:8px;'>P{(a.slot_start % PERIODS_PER_DAY) + 1}</td>"
+            f"<td style='padding:8px;font-weight:600;'>{a.course_name or 'Course'}</td>"
+            f"<td style='padding:8px;'>{a.cohort_name or 'Cohort'}</td>"
+            f"<td style='padding:8px;'>{a.staff_name or 'Faculty'}</td>"
+            f"<td style='padding:8px;'>{a.room_name or 'Room'}</td></tr>"
+            for a in assignments
+        ])
+        
+        html_doc = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Timetable Export - {versionId}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; color: #1e293b; }}
+        h1 {{ margin-bottom: 4px; font-size: 24px; color: #0f172a; }}
+        p {{ color: #64748b; margin-top: 0; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }}
+        th {{ background: #f8fafc; text-align: left; padding: 10px; border-bottom: 2px solid #cbd5e1; font-size: 12px; text-transform: uppercase; color: #475569; }}
+        @media print {{ body {{ padding: 0; }} }}
+    </style>
+</head>
+<body onload="window.print();">
+    <h1>Schedulr Timetable Export (FR-8.3)</h1>
+    <p>Version ID: {versionId} | State: {tv.state.upper()} | Total Assignments: {len(assignments)}</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Day</th>
+                <th>Period</th>
+                <th>Course</th>
+                <th>Cohort</th>
+                <th>Faculty</th>
+                <th>Room</th>
+            </tr>
+        </thead>
+        <tbody>
+            {html_rows}
+        </tbody>
+    </table>
+</body>
+</html>"""
+        return Response(
+            content=html_doc,
+            media_type="text/html",
+            headers={"Content-Disposition": f'inline; filename="timetable_{versionId}.html"'}
+        )
 
 
 @router.post("/{versionId}/edit", response_model=EditAssignmentResponse)

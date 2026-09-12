@@ -195,6 +195,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    exportUrl: (tenantId: string, versionId: string, format: 'csv' | 'ics' | 'pdf') =>
+      `${BASE}/api/v1/tenants/${tenantId}/timetables/${versionId}/export?format=${format}`,
   },
   rules: {
     parse: (tenantId: string, rawInputText: string) =>
