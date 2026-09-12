@@ -280,6 +280,16 @@ export const api = {
   substitutions: {
     list: (tenantId: string) => 
       request<{ items: any[] }>(`/api/v1/tenants/${tenantId}/substitutions`),
+    suggest: (tenantId: string, data: { absent_staff_profile_id: string; assignment_id: string; date: string; version_no: number }) =>
+      request<{ substitution_id: string; candidates: { staff_profile_id: string; current_load: number }[] }>(`/api/v1/tenants/${tenantId}/substitutions`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    confirm: (tenantId: string, substitutionId: string, data: { substitute_staff_profile_id: string; version_no: number }) =>
+      request<{ substitution_id: string; new_version_no: number }>(`/api/v1/tenants/${tenantId}/substitutions/${substitutionId}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
   import: {
     faculty: (tenantId: string, rows: any[]) =>
