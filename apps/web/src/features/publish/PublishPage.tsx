@@ -47,20 +47,54 @@ export function PublishPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Publish Timetable</h1>
         <p className="text-slate-500">Make the approved timetable live and notify stakeholders.</p>
       </header>
 
       <div className="flex flex-col lg:flex-row gap-8">
+        
+        {/* Left: Rocket Illustration & CTA */}
+        <div className="w-full lg:w-96 flex flex-col items-center justify-center bg-sky-50/50 rounded-2xl border border-sky-100 p-8 text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-sky-100/50"></div>
+          
+          <div className="relative z-10 flex flex-col items-center">
+            <img 
+              src="/rocket.png" 
+              alt="Rocket launching" 
+              className="w-full max-w-[240px] drop-shadow-xl mb-8 animate-bounce-slow"
+            />
+            
+            <h3 className="font-black text-2xl text-slate-900 mb-2">Ready to publish?</h3>
+            <p className="text-slate-600 text-sm font-medium mb-8 max-w-[250px]">
+              Send the finalized timetables to students and faculty.
+            </p>
+            
+            <button 
+              onClick={handlePublish}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 group hover:scale-[1.02]"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
+              {loading ? 'Publishing...' : 'Publish & Notify'}
+            </button>
+            {error && (
+              <div className="mt-4 p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm w-full">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Configuration */}
         <div className="flex-1 space-y-6">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Notification Scope</h2>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-4">
-                <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5" />
+                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                  <Users className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900">86 Faculty</h3>
@@ -68,8 +102,8 @@ export function PublishPage() {
                 </div>
               </div>
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-4">
-                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5" />
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                  <Users className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900">1,240 Students</h3>
@@ -79,10 +113,12 @@ export function PublishPage() {
             </div>
 
             <h2 className="text-lg font-bold text-slate-900 mb-4">Channels</h2>
-            <div className="space-y-3 mb-8">
+            <div className="space-y-3">
               <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-slate-400" />
+                  <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                    <Mail className="w-5 h-5 text-slate-500" />
+                  </div>
                   <span className="font-medium text-slate-700">Send Email Notification</span>
                 </div>
                 <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" />
@@ -90,7 +126,9 @@ export function PublishPage() {
               
               <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <Bell className="w-5 h-5 text-slate-400" />
+                  <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                    <Bell className="w-5 h-5 text-slate-500" />
+                  </div>
                   <span className="font-medium text-slate-700">Send Push Notification (Mobile App)</span>
                 </div>
                 <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" />
@@ -98,67 +136,13 @@ export function PublishPage() {
 
               <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <CalendarIcon className="w-5 h-5 text-slate-400" />
+                  <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                    <CalendarIcon className="w-5 h-5 text-slate-500" />
+                  </div>
                   <span className="font-medium text-slate-700">Sync to Google / Outlook Calendar</span>
                 </div>
                 <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" />
               </label>
-            </div>
-
-            {error && (
-              <div className="mb-4 p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm">
-                {error}
-              </div>
-            )}
-
-            <button 
-              onClick={handlePublish}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-70"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {loading ? 'Publishing...' : 'Publish & Notify'}
-            </button>
-          </div>
-        </div>
-
-        <div className="w-full lg:w-[450px] shrink-0">
-          <div className="bg-slate-100 rounded-2xl p-6 h-full flex flex-col border border-slate-200">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Email Preview</h3>
-            
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                <div className="flex gap-2 mb-2 text-sm">
-                  <span className="text-slate-500 w-12">From:</span>
-                  <span className="font-medium text-slate-900">Schedulr System &lt;no-reply@schedulr.edu&gt;</span>
-                </div>
-                <div className="flex gap-2 mb-2 text-sm">
-                  <span className="text-slate-500 w-12">To:</span>
-                  <span className="font-medium text-slate-900">All Faculty & Students</span>
-                </div>
-                <div className="flex gap-2 text-sm">
-                  <span className="text-slate-500 w-12">Subj:</span>
-                  <span className="font-medium text-slate-900">Timetable Published: {termId}</span>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl mb-6">S</div>
-                <h4 className="text-xl font-bold text-slate-900 mb-4">Your timetable is ready</h4>
-                <p className="text-slate-600 mb-4 text-sm leading-relaxed">
-                  Hello,<br/><br/>
-                  The academic timetable for <strong>{termId}</strong> has been finalized and published. 
-                  You can now log in to the portal or check your synchronized calendar app to view your updated schedule.
-                </p>
-                <div className="my-8">
-                  <a href="#" className="inline-block bg-indigo-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium">
-                    View My Schedule
-                  </a>
-                </div>
-                <p className="text-slate-500 text-xs mt-8 pt-4 border-t border-slate-100">
-                  This is an automated message. Please do not reply directly to this email.
-                </p>
-              </div>
             </div>
           </div>
         </div>

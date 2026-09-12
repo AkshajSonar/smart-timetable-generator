@@ -305,6 +305,78 @@ def build_h_forbidden_time_of_day(
                     if fv == target_id and sv in forbidden_slots:
                         model.Add(v == 0)
 
+
+def build_h_dynamic_time_window(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+    compiled: 'CompiledRules',
+    courses_by_id: dict,
+):
+    """Enforce dynamic time_window_constraint.
+    Unit json contains: days, start_time, end_time, target_type.
+    """
+    day_name_to_int = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+        "friday": 4, "saturday": 5, "sunday": 6
+    }
+    
+    from datetime import datetime
+    def parse_time(time_str: str | None):
+        if not time_str: return None
+        try: return datetime.strptime(time_str, "%H:%M").time()
+        except:
+            try: return datetime.strptime(time_str, "%H:%M:%S").time()
+            except: return None
+                
+    for (target_id, unit, polarity, weight) in compiled.time_window_rules:
+        days = unit.get("days", [])
+        if not days or "all" in [d.lower() for d in days]:
+            allowed_days = set(range(7))
+        else:
+            allowed_days = {day_name_to_int.get(d.lower()) for d in days if d.lower() in day_name_to_int}
+            allowed_days = {d for d in allowed_days if d is not None}
+            
+        start_t = parse_time(unit.get("start_time"))
+        end_t = parse_time(unit.get("end_time"))
+        target_type = unit.get("target_type")
+        
+        window_slots = set()
+        for ps in inp.period_slots:
+            if ps.weekday not in allowed_days:
+                continue
+            
+            ps_start = parse_time(ps.start_time)
+            ps_end = parse_time(ps.end_time)
+            
+            if not ps_start or not ps_end:
+                if not start_t and not end_t:
+                    window_slots.add(ps.slot_index)
+                continue
+                
+            if start_t and ps_start < start_t:
+                continue
+            if end_t and ps_end > end_t:
+                continue
+                
+            window_slots.add(ps.slot_index)
+            
+        for (f, c, k, b, r, s), v in assign.items():
+            course = courses_by_id[c]
+            
+            if target_id and (f != target_id and c != target_id and k != target_id and b != target_id):
+                continue
+                    
+            if target_type and course.type != target_type.lower():
+                continue
+            
+            if polarity == "forbid":
+                if s in window_slots:
+                    model.Add(v == 0)
+            elif polarity == "require":
+                if s not in window_slots:
+                    model.Add(v == 0)
+
 # ---------- Exam Builder functions (Phase 4) ----------
 
 
@@ -479,6 +551,7 @@ def _solve_classes(inp: SolverInput, timeout_seconds: int) -> list[AssignmentRes
     build_h10_shared_lab_capacity(model, assign, inp, courses_by_id)
     build_h11_no_student_double_booking(model, assign, inp, courses_by_id)
     build_h_forbidden_time_of_day(model, assign, inp, compiled)
+    build_h_dynamic_time_window(model, assign, inp, compiled, courses_by_id)
 
     # Enforce locked assignments (FR-9.2)
     for locked in inp.locked_assignments:

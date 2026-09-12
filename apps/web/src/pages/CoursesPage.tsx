@@ -50,7 +50,7 @@ export function CoursesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Courses</h1>
           <p className="text-slate-500">Manage all courses, subjects and their configurations.</p>
         </div>
-        <button className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
+        <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
           <Plus className="w-4 h-4" />
           Add Course
         </button>
@@ -114,10 +114,10 @@ export function CoursesPage() {
                       <td className="px-6 py-4 font-medium text-slate-900">{course.name}</td>
                       <td className="px-6 py-4 text-slate-600">{departments[course.department_id] || 'Unknown'}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-                          course.type === 'core' ? 'bg-indigo-50 text-indigo-700' :
-                          course.type === 'elective' ? 'bg-emerald-50 text-emerald-700' :
-                          'bg-amber-50 text-amber-700'
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
+                          course.type === 'core' ? 'bg-indigo-100 text-indigo-700' :
+                          course.type === 'elective' ? 'bg-emerald-100 text-emerald-700' :
+                          'bg-amber-100 text-amber-700'
                         }`}>
                           {course.type.charAt(0).toUpperCase() + course.type.slice(1)}
                         </span>

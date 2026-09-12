@@ -47,61 +47,45 @@ export function Sidebar() {
   const NavItem = ({ item }: { item: { path: string, label: string, icon: any } }) => (
     <NavLink
       to={item.path}
+      title={item.label}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group ${
+        `flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 group mx-auto mb-2 ${
           isActive 
-            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
+            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
             : 'text-slate-400 hover:text-white hover:bg-slate-800'
         }`
       }
     >
       <item.icon className="w-5 h-5 shrink-0" />
-      <span className="font-medium text-sm truncate">{item.label}</span>
     </NavLink>
   );
 
   return (
-    <aside className="w-64 h-screen bg-[#111827] flex flex-col border-r border-slate-800 shrink-0 sticky top-0 overflow-y-auto overflow-x-hidden">
-      <div className="p-5 flex items-center gap-3 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <span className="text-white font-bold text-lg leading-none">S</span>
-        </div>
-        <span className="text-white font-bold text-xl tracking-tight">Schedulr</span>
-      </div>
-
-      <div className="flex-1 px-3 py-2 space-y-6">
-        <div>
-          <div className="px-3 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Core</div>
-          <div className="space-y-1">
-            {mainNavItems.map(item => <NavItem key={item.path} item={item} />)}
-          </div>
-        </div>
-
-        <div>
-          <div className="px-3 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Generation</div>
-          <div className="space-y-1">
-            {generationItems.map(item => <NavItem key={item.path} item={item} />)}
-          </div>
-        </div>
-
-        <div>
-          <div className="px-3 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Views</div>
-          <div className="space-y-1">
-            {specializedItems.map(item => <NavItem key={item.path} item={item} />)}
-          </div>
+    <aside className="w-20 h-screen bg-[#1A1C29] flex flex-col shrink-0 sticky top-0 overflow-y-auto overflow-x-hidden z-20">
+      <div className="p-4 flex items-center justify-center shrink-0 mb-6 mt-2">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 cursor-pointer" title="Schedulr">
+          <span className="text-white font-black text-2xl leading-none">S</span>
         </div>
       </div>
 
-      <div className="p-4 shrink-0 border-t border-slate-800">
+      <div className="flex-1 px-2 py-2 flex flex-col gap-1">
+        {mainNavItems.map(item => <NavItem key={item.path} item={item} />)}
+        <div className="w-8 h-px bg-slate-800 mx-auto my-2" />
+        {generationItems.map(item => <NavItem key={item.path} item={item} />)}
+        <div className="w-8 h-px bg-slate-800 mx-auto my-2" />
+        {specializedItems.map(item => <NavItem key={item.path} item={item} />)}
+      </div>
+
+      <div className="p-4 shrink-0 mt-auto">
         <button 
+          title="Sign Out"
           onClick={() => {
             localStorage.clear();
             navigate('/login');
           }}
-          className="flex items-center gap-3 px-3 py-2 w-full rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="flex items-center justify-center w-12 h-12 mx-auto rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
         >
           <LogOut className="w-5 h-5" />
-          <span className="font-medium text-sm">Sign Out</span>
         </button>
       </div>
     </aside>

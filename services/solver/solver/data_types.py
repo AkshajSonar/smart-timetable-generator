@@ -87,6 +87,8 @@ class PeriodSlot:
     slot_index: int
     weekday: int
     period_index: int
+    start_time: str | None = None
+    end_time: str | None = None
 
 
 @dataclass

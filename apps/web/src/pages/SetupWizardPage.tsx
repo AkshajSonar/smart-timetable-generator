@@ -119,49 +119,52 @@ export function SetupWizardPage() {
       </div>
 
       {step === 1 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">Select your institution type</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {[
-              { id: 'school', title: 'School', desc: 'K-12 institutions', icon: Building2 },
-              { id: 'college', title: 'College', desc: 'Undergraduate colleges', icon: GraduationCap },
-              { id: 'university', title: 'University', desc: 'Multi-department universities', icon: Library },
-            ].map(type => (
-              <button
-                key={type.id}
-                onClick={() => setInstitutionType(type.id)}
-                className={`relative flex flex-col items-center text-center p-6 rounded-xl border-2 transition-all ${
-                  institutionType === type.id 
-                    ? 'border-indigo-600 bg-indigo-50/50' 
-                    : 'border-slate-100 hover:border-slate-200 bg-white'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
-                  institutionType === type.id ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-400'
-                }`}>
-                  <type.icon className="w-6 h-6" />
-                </div>
-                <h3 className={`font-bold mb-1 ${institutionType === type.id ? 'text-indigo-900' : 'text-slate-700'}`}>{type.title}</h3>
-                <p className="text-xs text-slate-500">{type.desc}</p>
-                
-                {institutionType === type.id && (
-                  <div className="absolute top-3 right-3 text-indigo-600">
-                    <CheckCircle2 className="w-5 h-5" />
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden flex flex-col md:flex-row">
+          <div className="flex-1 p-8">
+            <h2 className="text-xl font-bold text-slate-900 mb-6">Select your institution type</h2>
+            
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              {[
+                { id: 'school', title: 'School', desc: 'For K-12 institutions', icon: Building2 },
+                { id: 'college', title: 'College', desc: 'For undergraduate colleges', icon: GraduationCap },
+                { id: 'university', title: 'University', desc: 'For multi-department universities', icon: Library },
+                { id: 'coaching', title: 'Coaching', desc: 'For coaching institutes', icon: Building2 },
+              ].map(type => (
+                <button
+                  key={type.id}
+                  onClick={() => setInstitutionType(type.id)}
+                  className={`relative flex flex-col items-center text-center p-6 rounded-xl border-2 transition-all ${
+                    institutionType === type.id 
+                      ? 'border-indigo-600 bg-indigo-50' 
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${
+                    institutionType === type.id ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-400'
+                  }`}>
+                    <type.icon className="w-6 h-6" />
                   </div>
-                )}
-              </button>
-            ))}
-          </div>
+                  <h3 className={`font-bold mb-1 ${institutionType === type.id ? 'text-indigo-900' : 'text-slate-700'}`}>{type.title}</h3>
+                  <p className="text-xs text-slate-500">{type.desc}</p>
+                </button>
+              ))}
+            </div>
 
-          <div className="flex justify-end pt-6 border-t border-slate-100">
-            <button 
-              onClick={() => setStep(2)}
-              disabled={!institutionType}
-              className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm"
-            >
-              Next: Campus Setup <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex justify-end pt-6 border-t border-slate-100">
+              <button 
+                onClick={() => setStep(2)}
+                disabled={!institutionType}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white px-8 py-3 rounded-xl text-sm font-medium transition-colors shadow-sm"
+              >
+                Next <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="hidden md:flex flex-1 bg-orange-50/50 p-8 flex-col items-center justify-center text-center">
+            <img src="/setup_hero.png" alt="Let's set up your institution" className="w-full max-w-sm mb-6 drop-shadow-xl" />
+            <h3 className="text-2xl font-black text-slate-900 mb-2">Let's set up<br/>your institution</h3>
+            <p className="text-slate-500 font-medium">A few steps to get started</p>
           </div>
         </div>
       )}
@@ -185,7 +188,7 @@ export function SetupWizardPage() {
             </button>
             <button 
               onClick={() => setStep(3)}
-              className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm"
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm"
             >
               Next: Master Data Imports <ArrowRight className="w-4 h-4" />
             </button>

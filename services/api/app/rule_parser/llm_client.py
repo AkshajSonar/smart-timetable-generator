@@ -21,6 +21,7 @@ class ParsedRule(BaseModel):
         "room_utilization_priority",
         "elective_no_overlap_core",
         "exam_min_gap_days",
+        "time_window_constraint",
         "unsupported",
     ] = Field(description="The matching rule type from the allowed enum.")
     scope: Literal["tenant", "department", "faculty", "course", "cohort"] = Field(
@@ -30,7 +31,7 @@ class ParsedRule(BaseModel):
         None, description="The specific name or ID of the target entity if applicable."
     )
     threshold: float | None = Field(None, description="The numeric threshold if any.")
-    unit: str | None = Field(None, description="The unit of the threshold if any.")
+    unit: str | None = Field(None, description="The unit of the threshold if any (e.g. 'periods'). For time_window_constraint, this MUST be a JSON string like {\"days\": [\"saturday\"], \"start_time\": \"17:30\", \"end_time\": null, \"target_type\": \"lab\"}.")
     polarity: Literal["max", "min", "forbid", "require"] | None = Field(
         None, description="The polarity of the rule."
     )
@@ -53,7 +54,8 @@ async def parse_rule_nl(text: str) -> ParsedRule:
             return ParsedRule(rule_type="balance_load_across_week", scope="faculty", polarity="require")
         elif "not work" in text_lower or "unavailable" in text_lower:
             target = "Devang" if "devang" in text_lower else None
-            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="forbid")
+            unit = "tuesday" if "tuesday" in text_lower else None
+            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="forbid", unit=unit)
         elif "work on" in text_lower:
             target = "Kuber" if "kuber" in text_lower else None
             return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="require", unit="thursday, friday, and saturday")
@@ -76,6 +78,7 @@ The `rule_type` must be exactly one of the following:
 - room_utilization_priority: "prioritize using all rooms evenly"
 - elective_no_overlap_core: "electives should never clash with core classes for a cohort"
 - exam_min_gap_days: "give students at least one day between exams"
+- time_window_constraint: "on saturday there shall be no class", "no class after 5:30", "lab classes after 5:30 only". For this rule, you MUST output a JSON string in the `unit` field containing `days` (array of day strings or ["all"]), `start_time` (e.g. "17:30" or null), `end_time` (e.g. "17:30" or null), and `target_type` (e.g. "lab", "core" or null).
 - unsupported: anything that doesn't clearly match the above
 
 Output only valid JSON matching the schema, nothing else.
@@ -106,7 +109,8 @@ Output only valid JSON matching the schema, nothing else.
             return ParsedRule(rule_type="balance_load_across_week", scope="faculty", polarity="require")
         elif "not work" in text_lower or "unavailable" in text_lower:
             target = "Devang" if "devang" in text_lower else None
-            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="forbid")
+            unit = "tuesday" if "tuesday" in text_lower else None
+            return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="forbid", unit=unit)
         elif "work on" in text_lower:
             target = "Kuber" if "kuber" in text_lower else None
             return ParsedRule(rule_type="preferred_time_of_day", scope="faculty", target_id=target, polarity="require", unit="thursday, friday, and saturday")

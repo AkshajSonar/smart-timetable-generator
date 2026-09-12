@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Users, Building2, Download, Loader2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { useTenant } from '../lib/TenantContext';
 import { api, type LoadVerificationReport } from '../api/client';
 
@@ -108,65 +109,40 @@ export function ReportsPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 overflow-hidden">
-              <h3 className="font-bold text-slate-900 mb-4">Room Utilization Detail</h3>
-              <div className="overflow-y-auto max-h-[300px]">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 sticky top-0">
-                    <tr>
-                      <th className="py-2 px-3 font-medium">Room</th>
-                      <th className="py-2 px-3 font-medium">Capacity</th>
-                      <th className="py-2 px-3 font-medium text-right">Utilization</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {roomUtil?.rooms?.map((r: any) => (
-                      <tr key={r.room_id}>
-                        <td className="py-3 px-3 font-medium text-slate-900">{r.room_name}</td>
-                        <td className="py-3 px-3 text-slate-500">{r.capacity}</td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            r.utilization_percentage > 80 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {r.utilization_percentage}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+              <h3 className="font-bold text-slate-900 mb-6">Room Utilization</h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={roomUtil?.rooms || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="room_name" tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                    <YAxis tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} tickFormatter={(val) => `${val}%`} />
+                    <RechartsTooltip 
+                      cursor={{fill: '#f8fafc'}}
+                      contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                    />
+                    <Bar dataKey="utilization_percentage" name="Utilization" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 overflow-hidden">
-              <h3 className="font-bold text-slate-900 mb-4">Faculty Verification</h3>
-              <div className="overflow-y-auto max-h-[300px]">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 sticky top-0">
-                    <tr>
-                      <th className="py-2 px-3 font-medium">Faculty</th>
-                      <th className="py-2 px-3 font-medium text-right">Req.</th>
-                      <th className="py-2 px-3 font-medium text-right">Sch.</th>
-                      <th className="py-2 px-3 font-medium text-right">Diff.</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {verification?.faculty_load?.map((f: any) => (
-                      <tr key={f.id}>
-                        <td className="py-3 px-3 font-medium text-slate-900">{f.name}</td>
-                        <td className="py-3 px-3 text-right text-slate-500">{f.required_hours}h</td>
-                        <td className="py-3 px-3 text-right text-slate-500">{f.scheduled_hours}h</td>
-                        <td className="py-3 px-3 text-right">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${
-                            f.difference === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                          }`}>
-                            {f.difference > 0 ? '+' : ''}{f.difference}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+              <h3 className="font-bold text-slate-900 mb-6">Faculty Load Verification</h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={verification?.faculty_load || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                    <YAxis tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                    <RechartsTooltip 
+                      cursor={{fill: '#f8fafc'}}
+                      contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                    />
+                    <Bar dataKey="required_hours" name="Required Hrs" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={24} />
+                    <Bar dataKey="scheduled_hours" name="Scheduled Hrs" fill="#10b981" radius={[4, 4, 0, 0]} barSize={24} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>

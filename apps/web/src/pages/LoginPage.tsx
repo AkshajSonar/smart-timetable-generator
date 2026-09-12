@@ -85,7 +85,7 @@ export function LoginPage() {
 
           <button 
             type="submit" 
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-slate-900/10 mt-6"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-indigo-600/20 mt-6"
           >
             Sign In
           </button>
@@ -125,20 +125,20 @@ export function LoginPage() {
       </div>
 
       {/* Right Graphic Section */}
-      <div className="hidden lg:flex flex-1 relative bg-indigo-50/50 overflow-hidden items-center justify-center">
-        {/* Soft abstract blobs */}
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-purple-300/30 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
-        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-indigo-300/30 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-1/3 w-[600px] h-[600px] bg-sky-300/30 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000"></div>
+      <div className="hidden lg:flex flex-1 relative bg-indigo-50/50 overflow-hidden items-center justify-center p-12">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 to-purple-50 mix-blend-multiply opacity-50"></div>
         
-        <div className="relative z-10 max-w-lg text-center">
-          <div className="w-32 h-32 mx-auto bg-white rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-12 hover:rotate-0 transition-transform duration-500">
-            <CalendarDays className="w-16 h-16 text-indigo-600" />
-          </div>
-          <h2 className="text-5xl font-black tracking-tight text-slate-900 mb-6 drop-shadow-sm">
+        <div className="relative z-10 w-full h-full max-w-2xl text-center flex flex-col justify-center items-center">
+          <h2 className="text-5xl font-black tracking-tight text-slate-900 mb-2 drop-shadow-sm">
             Organize.<br/>Optimize.<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Empower.</span>
           </h2>
-          <p className="text-xl text-slate-600 font-medium">Better schedules, brighter futures.</p>
+          <p className="text-xl text-slate-600 font-medium mb-12">Better schedules, brighter futures.</p>
+          
+          <img 
+            src="/login_hero.png" 
+            alt="Student organizing schedule" 
+            className="w-full h-auto object-contain drop-shadow-2xl max-h-[60vh]"
+          />
         </div>
       </div>
 

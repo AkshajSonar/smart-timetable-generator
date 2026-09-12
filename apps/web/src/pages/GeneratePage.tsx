@@ -127,30 +127,51 @@ export function GeneratePage() {
                   </label>
                 </div>
               </div>
-            </div>
-          )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-3">Pre-generation Checklist</label>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                      <span className="text-sm font-medium text-slate-700">Master data imported</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                      <span className="text-sm font-medium text-slate-700">Hard constraints verified</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                      <span className="text-sm font-medium text-slate-700">Soft constraints weighted</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="w-full lg:w-80 space-y-6">
-          <div className="bg-indigo-900 text-white p-6 rounded-2xl relative overflow-hidden shadow-sm">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6">
-                <Bot className="w-6 h-6 text-indigo-300" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Ready to generate?</h3>
-              <p className="text-indigo-200 text-sm leading-relaxed mb-6">
-                Our CP-SAT solver will analyze all hard and soft constraints to produce the optimal conflict-free schedule.
-              </p>
-              <button 
-                onClick={handleGenerate}
-                disabled={loading || selectedDepts.length === 0}
-                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-indigo-50 text-indigo-900 font-bold py-3 rounded-xl transition-colors shadow-lg disabled:opacity-50"
-              >
-                <Zap className="w-4 h-4 text-yellow-500" />
-                Start Generation
-              </button>
-            </div>
+        <div className="w-full lg:w-96 flex flex-col items-center justify-center bg-indigo-50/50 rounded-2xl border border-indigo-100 p-8 text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-indigo-100/50"></div>
+          
+          <div className="relative z-10 flex flex-col items-center">
+            <img 
+              src="/ai_robot.png" 
+              alt="AI generating timetable" 
+              className="w-full max-w-[240px] drop-shadow-xl mb-8 animate-bounce-slow"
+            />
+            
+            <h3 className="font-black text-2xl text-slate-900 mb-2">Ready to generate?</h3>
+            <p className="text-slate-600 text-sm font-medium mb-8 max-w-[250px]">
+              Our CP-SAT solver will analyze constraints to produce the optimal schedule.
+            </p>
+            
+            <button 
+              onClick={handleGenerate}
+              disabled={loading || selectedDepts.length === 0}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 group hover:scale-[1.02]"
+            >
+              <Zap className="w-5 h-5 text-yellow-300 group-hover:animate-pulse" />
+              Start Generation
+            </button>
           </div>
         </div>
       </div>

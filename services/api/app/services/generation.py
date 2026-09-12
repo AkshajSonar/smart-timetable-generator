@@ -137,7 +137,13 @@ async def build_solver_input(
         slot_index += 1
 
     period_slots = [
-        PeriodSlot(slot_index=slot_map[(pt.weekday, pt.period_index)], weekday=pt.weekday, period_index=pt.period_index)
+        PeriodSlot(
+            slot_index=slot_map[(pt.weekday, pt.period_index)], 
+            weekday=pt.weekday, 
+            period_index=pt.period_index,
+            start_time=pt.start_time.isoformat() if pt.start_time else None,
+            end_time=pt.end_time.isoformat() if pt.end_time else None
+        )
         for pt in period_templates
     ]
 

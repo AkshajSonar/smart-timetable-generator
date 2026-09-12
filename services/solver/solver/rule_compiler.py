@@ -31,6 +31,9 @@ class CompiledRules:
     balance_load_across_week_weight: int | None = None
     
     room_utilization_priority_weight: int | None = None
+    
+    # Store list of generic time window rules: (target_id, unit_json, polarity, weight)
+    time_window_rules: list[tuple[str | None, dict, str | None, int | None]] = field(default_factory=list)
 
 
 def compile_constraint_rules(inp: SolverInput) -> CompiledRules:
@@ -115,5 +118,16 @@ def compile_constraint_rules(inp: SolverInput) -> CompiledRules:
         # room_utilization_priority
         elif rule.rule_type == "room_utilization_priority":
             compiled.room_utilization_priority_weight = int(rule_weight)
+
+        # time_window_constraint
+        elif rule.rule_type == "time_window_constraint":
+            try:
+                import json
+                unit_data = json.loads(rule.unit) if rule.unit else {}
+                compiled.time_window_rules.append(
+                    (rule.target_id, unit_data, rule.polarity, int(rule_weight))
+                )
+            except Exception as e:
+                logger.error(f"Failed to parse time_window_constraint unit JSON: {e}")
             
     return compiled

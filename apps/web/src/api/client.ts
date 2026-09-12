@@ -146,6 +146,16 @@ export interface StaffProfile {
   email?: string;
 }
 
+export interface PeriodTemplate {
+  id: string;
+  tenant_id: string;
+  weekday: number;
+  period_index: number;
+  start_time: string;
+  end_time: string;
+  shift: string;
+}
+
 export interface Rule {
   id: string;
   tenant_id: string;
@@ -252,6 +262,10 @@ export const api = {
       const res = await request<PaginatedResponse<AcademicTerm>>(`/api/v1/tenants/${tenantId}/terms?limit=1`);
       return res.items[0] || null;
     },
+  },
+  periodTemplates: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<PeriodTemplate>>(`/api/v1/tenants/${tenantId}/period-templates?limit=100`),
   },
   rules: {
     list: (tenantId: string) =>

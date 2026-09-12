@@ -6,12 +6,11 @@
  * Slot encoding: slot_start = weekday * periodsPerDay + period_index
  */
 
-import { useState } from 'react';
-import type { Assignment, TimetableVersion } from '../../api/client';
-import { Lock, Move } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { api, type Assignment, type TimetableVersion, type PeriodTemplate } from '../../api/client';
+import { Lock, Move, Loader2 } from 'lucide-react';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const PERIODS_PER_DAY = 6;
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const COURSE_COLORS = [
   'from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-900',
@@ -33,23 +32,86 @@ interface Props {
 export function TimetableGrid({ timetable, onAssignmentMove, readOnly = false }: Props) {
   const [draggedAssignmentId, setDraggedAssignmentId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  
+  const [periodTemplates, setPeriodTemplates] = useState<PeriodTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Build a lookup: slot_start → array of assignments
-  const bySlot = new Map<number, (Assignment & { is_locked?: boolean; course_name?: string; staff_name?: string; room_name?: string })[]>();
-  const courseColorIndex = new Map<string, number>();
-  let colorIdx = 0;
-
-  for (const a of timetable.assignments) {
-    const list = bySlot.get(a.slot_start) || [];
-    list.push(a);
-    bySlot.set(a.slot_start, list);
-    
-    if (!courseColorIndex.has(a.course_id)) {
-      courseColorIndex.set(a.course_id, colorIdx++ % COURSE_COLORS.length);
+  useEffect(() => {
+    async function load() {
+      if (!timetable.tenant_id) return;
+      try {
+        const res = await api.periodTemplates.list(timetable.tenant_id);
+        setPeriodTemplates(res.items || []);
+      } catch (err) {
+        console.error("Failed to load period templates:", err);
+      } finally {
+        setLoading(false);
+      }
     }
+    load();
+  }, [timetable.tenant_id]);
+
+  // Compute layout and slot mapping
+  const { days, maxPeriods, slotMap } = useMemo(() => {
+    if (periodTemplates.length === 0) {
+      return { days: [], maxPeriods: 0, slotMap: new Map<string, number>() };
+    }
+
+    const uniqueDays = Array.from(new Set(periodTemplates.map(pt => pt.weekday))).sort((a, b) => a - b);
+    const maxP = Math.max(...periodTemplates.map(pt => pt.period_index));
+
+    // Sort exactly like backend to compute slot_index
+    const sortedTemplates = [...periodTemplates].sort((a, b) => {
+      if (a.weekday !== b.weekday) return a.weekday - b.weekday;
+      return a.period_index - b.period_index;
+    });
+
+    const map = new Map<string, number>();
+    sortedTemplates.forEach((pt, index) => {
+      map.set(`${pt.weekday}-${pt.period_index}`, index);
+    });
+
+    return { days: uniqueDays, maxPeriods: maxP + 1, slotMap: map };
+  }, [periodTemplates]);
+
+  const bySlot = useMemo(() => {
+    const map = new Map<number, (Assignment & { is_locked?: boolean; course_name?: string; staff_name?: string; room_name?: string })[]>();
+    for (const a of timetable.assignments) {
+      const list = map.get(a.slot_start) || [];
+      list.push(a);
+      map.set(a.slot_start, list);
+    }
+    return map;
+  }, [timetable.assignments]);
+
+  const courseColorIndex = useMemo(() => {
+    const index = new Map<string, number>();
+    let colorIdx = 0;
+    for (const a of timetable.assignments) {
+      if (!index.has(a.course_id)) {
+        index.set(a.course_id, colorIdx++ % COURSE_COLORS.length);
+      }
+    }
+    return index;
+  }, [timetable.assignments]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 bg-white rounded-xl border border-slate-200">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+      </div>
+    );
   }
 
-  const periods = Array.from({ length: PERIODS_PER_DAY }, (_, i) => i);
+  if (periodTemplates.length === 0) {
+    return (
+      <div className="p-12 text-center text-slate-500 bg-white rounded-xl border border-slate-200">
+        No period templates found. Please configure them in the Setup Wizard.
+      </div>
+    );
+  }
+
+  const periods = Array.from({ length: maxPeriods }, (_, i) => i);
 
   const handleDragStart = (e: React.DragEvent, assignmentId: string, currentSlot: number) => {
     if (readOnly || !onAssignmentMove) return;
@@ -100,12 +162,12 @@ export function TimetableGrid({ timetable, onAssignmentMove, readOnly = false }:
             <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-widest text-slate-500 bg-slate-50 border-b border-slate-200 w-24">
               Period
             </th>
-            {DAYS.map(day => (
+            {days.map(day => (
               <th
                 key={day}
                 className="py-3 px-4 text-center text-xs font-semibold uppercase tracking-widest text-slate-500 bg-slate-50 border-b border-slate-200"
               >
-                {day}
+                {WEEKDAYS[day]}
               </th>
             ))}
           </tr>
@@ -117,14 +179,20 @@ export function TimetableGrid({ timetable, onAssignmentMove, readOnly = false }:
                 P{period + 1}
               </td>
 
-              {DAYS.map((_, dayIdx) => {
-                const slot = dayIdx * PERIODS_PER_DAY + period;
-                const assignments = bySlot.get(slot) || [];
-                const isOver = dragOverSlot === slot;
+              {days.map(day => {
+                // If there's no template for this specific (day, period), we'll render an empty inactive cell
+                const slot = slotMap.get(`${day}-${period}`);
+                const isActive = slot !== undefined;
+                const assignments = isActive ? bySlot.get(slot) || [] : [];
+                const isOver = isActive && dragOverSlot === slot;
+
+                if (!isActive) {
+                  return <td key={day} className="bg-slate-50/50 border-b border-r border-slate-100 last:border-r-0"></td>;
+                }
 
                 return (
                   <td
-                    key={dayIdx}
+                    key={day}
                     onDragOver={(e) => handleDragOver(e, slot)}
                     onDragLeave={(e) => handleDragLeave(e, slot)}
                     onDrop={(e) => handleDrop(e, slot)}

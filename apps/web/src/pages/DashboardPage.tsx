@@ -64,98 +64,144 @@ export function DashboardPage() {
       </header>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-md">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <BookOpen className="w-5 h-5" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <BookOpen className="w-6 h-6" />
             </div>
-            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">+2 new</span>
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 leading-none">{loading ? '...' : metrics.courses}</h3>
+              <p className="text-slate-500 font-medium text-sm mt-1">Classes</p>
+            </div>
           </div>
-          <p className="text-slate-500 font-medium text-sm mb-1">Total Courses</p>
-          <h3 className="text-3xl font-bold text-slate-900">{loading ? '...' : metrics.courses}</h3>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-md">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
-              <Users className="w-5 h-5" />
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+              <PlusCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 leading-none">0</h3>
+              <p className="text-slate-500 font-medium text-sm mt-1">Conflicts</p>
             </div>
           </div>
-          <p className="text-slate-500 font-medium text-sm mb-1">Active Faculty</p>
-          <h3 className="text-3xl font-bold text-slate-900">{loading ? '...' : metrics.faculty}</h3>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-md">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Building2 className="w-5 h-5" />
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 leading-none">{loading ? '...' : metrics.faculty}</h3>
+              <p className="text-slate-500 font-medium text-sm mt-1">Faculty</p>
             </div>
           </div>
-          <p className="text-slate-500 font-medium text-sm mb-1">Total Rooms & Labs</p>
-          <h3 className="text-3xl font-bold text-slate-900">{loading ? '...' : metrics.rooms}</h3>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-md">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5" />
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 leading-none">{loading ? '...' : metrics.rooms}</h3>
+              <p className="text-slate-500 font-medium text-sm mt-1">Rooms</p>
             </div>
           </div>
-          <p className="text-slate-500 font-medium text-sm mb-1">Registered Students</p>
-          <h3 className="text-3xl font-bold text-slate-900">{loading ? '...' : metrics.students}</h3>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Col: Timetable */}
+        <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Quick Actions</h2>
+            <h2 className="text-lg font-bold text-slate-900">This Week's Timetable</h2>
+            <button className="text-sm font-medium text-indigo-600 hover:text-indigo-700">View Full</button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Link to="/rules" className="flex flex-col items-center justify-center p-6 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors group cursor-pointer text-center">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 group-hover:scale-110 transition-transform">
-                <PlusCircle className="w-6 h-6 text-indigo-600" />
-              </div>
-              <span className="font-medium text-slate-900">Add Constraint Rule</span>
-            </Link>
-            <Link to="/review" className="flex flex-col items-center justify-center p-6 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors group cursor-pointer text-center">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 group-hover:scale-110 transition-transform">
-                <FileCheck2 className="w-6 h-6 text-emerald-600" />
-              </div>
-              <span className="font-medium text-slate-900">Review Draft Timetable</span>
-            </Link>
+          
+          <div className="w-full h-64 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-center relative overflow-hidden">
+            {/* Mock mini timetable grid */}
+            <div className="absolute inset-0 grid grid-cols-5 grid-rows-4 gap-1 p-2">
+               {/* Day headers */}
+               <div className="text-center text-xs font-medium text-slate-400">Mon</div>
+               <div className="text-center text-xs font-medium text-slate-400">Tue</div>
+               <div className="text-center text-xs font-medium text-slate-400">Wed</div>
+               <div className="text-center text-xs font-medium text-slate-400">Thu</div>
+               <div className="text-center text-xs font-medium text-slate-400">Fri</div>
+               
+               {/* Blocks */}
+               <div className="bg-indigo-100 rounded-md p-1 border border-indigo-200"></div>
+               <div className="bg-emerald-100 rounded-md p-1 border border-emerald-200"></div>
+               <div className="bg-orange-100 rounded-md p-1 border border-orange-200"></div>
+               <div className="bg-sky-100 rounded-md p-1 border border-sky-200"></div>
+               <div className="bg-purple-100 rounded-md p-1 border border-purple-200"></div>
+
+               <div></div>
+               <div className="bg-sky-100 rounded-md p-1 border border-sky-200"></div>
+               <div className="bg-indigo-100 rounded-md p-1 border border-indigo-200"></div>
+               <div></div>
+               <div className="bg-emerald-100 rounded-md p-1 border border-emerald-200"></div>
+
+               <div className="bg-orange-100 rounded-md p-1 border border-orange-200"></div>
+               <div></div>
+               <div className="bg-purple-100 rounded-md p-1 border border-purple-200"></div>
+               <div className="bg-emerald-100 rounded-md p-1 border border-emerald-200"></div>
+               <div className="bg-indigo-100 rounded-md p-1 border border-indigo-200"></div>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Recent Activity</h2>
-            <button className="text-sm font-medium text-indigo-600 hover:text-indigo-700">View All</button>
-          </div>
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
-                <CalendarDays className="w-5 h-5 text-indigo-600" />
+        {/* Right Col: Upcoming & Activity */}
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">Upcoming</h2>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Review draft timetable</p>
+                  <p className="text-xs text-slate-500">Action Required</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-slate-900 font-medium">Draft Timetable v2 Generated</p>
-                <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>2 hours ago by System</span>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Add elective enrollments</p>
+                  <p className="text-xs text-slate-500">Due tomorrow</p>
                 </div>
               </div>
             </div>
-            
-            <div className="flex gap-4">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-                <FileCheck2 className="w-5 h-5 text-emerald-600" />
+          </div>
+
+          <div className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Recent Activity</h2>
+            </div>
+            <div className="space-y-4">
+              <div className="flex gap-3 relative before:absolute before:left-[15px] before:top-8 before:bottom-[-16px] before:w-px before:bg-slate-200">
+                <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shrink-0 z-10">
+                  <CalendarDays className="w-4 h-4 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-900 font-medium">Timetable generated</p>
+                  <p className="text-xs text-slate-500">2 hours ago</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-slate-900 font-medium">New rule added for CS301</p>
-                <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Yesterday by Alice</span>
+              
+              <div className="flex gap-3 relative">
+                <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shrink-0 z-10">
+                  <Users className="w-4 h-4 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-900 font-medium">New faculty added</p>
+                  <p className="text-xs text-slate-500">Yesterday</p>
                 </div>
               </div>
             </div>

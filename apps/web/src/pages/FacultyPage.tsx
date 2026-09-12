@@ -42,7 +42,7 @@ export function FacultyPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Faculty</h1>
           <p className="text-slate-500">Manage faculty profiles, availability and workload.</p>
         </div>
-        <button className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
+        <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm">
           <Plus className="w-4 h-4" />
           Add Faculty
         </button>
@@ -92,15 +92,17 @@ export function FacultyPage() {
                       <tr key={f.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
-                              {generateAvatar(name.replace('Dr. ', '').replace('Prof. ', ''))}
-                            </div>
+                            <img 
+                              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(name.replace('Dr. ', '').replace('Prof. ', ''))}&background=random&color=fff&rounded=true&bold=true`} 
+                              alt={name}
+                              className="w-8 h-8 rounded-full shadow-sm shrink-0"
+                            />
                             <span className="font-medium text-slate-900">{name}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-                            f.employment_type === 'full_time' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
+                            f.employment_type === 'full_time' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
                           }`}>
                             {f.employment_type === 'full_time' ? 'Full-time' : 'Part-time'}
                           </span>

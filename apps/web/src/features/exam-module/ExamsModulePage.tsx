@@ -127,9 +127,11 @@ export function ExamsModulePage() {
                     <td className="px-6 py-4 text-slate-600">
                       {r.invigilator_staff_profile_id ? (
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[10px]">
-                            IN
-                          </div>
+                          <img 
+                            src={`https://ui-avatars.com/api/?name=${r.invigilator_staff_profile_id}&background=random&color=fff&rounded=true&bold=true`}
+                            alt="Invigilator"
+                            className="w-6 h-6 rounded-full shadow-sm shrink-0"
+                          />
                           {r.invigilator_staff_profile_id.substring(0, 8)}
                         </div>
                       ) : (
@@ -250,9 +252,11 @@ export function ExamsModulePage() {
                   <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs">
-                          INV
-                        </div>
+                        <img 
+                          src={`https://ui-avatars.com/api/?name=${session.invigilator_staff_profile_id}&background=random&color=fff&rounded=true&bold=true`}
+                          alt="Invigilator"
+                          className="w-8 h-8 rounded-full shadow-sm shrink-0"
+                        />
                         <div>
                           <div className="font-bold text-slate-900 text-sm">
                             Staff Profile: {session.invigilator_staff_profile_id?.slice(0, 8)}
