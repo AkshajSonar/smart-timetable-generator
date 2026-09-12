@@ -280,5 +280,27 @@ export const api = {
   substitutions: {
     list: (tenantId: string) => 
       request<{ items: any[] }>(`/api/v1/tenants/${tenantId}/substitutions`),
-  }
+  },
+  import: {
+    faculty: (tenantId: string, rows: any[]) =>
+      request<{ success_count: number; errors: any[] }>(`/api/v1/tenants/${tenantId}/import/faculty`, {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }),
+    courses: (tenantId: string, rows: any[]) =>
+      request<{ success_count: number; errors: any[] }>(`/api/v1/tenants/${tenantId}/import/courses`, {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }),
+    rooms: (tenantId: string, rows: any[]) =>
+      request<{ success_count: number; errors: any[] }>(`/api/v1/tenants/${tenantId}/import/rooms`, {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }),
+    enrollments: (tenantId: string, rows: any[]) =>
+      request<{ success_count: number; errors: any[] }>(`/api/v1/tenants/${tenantId}/import/enrollment`, {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }),
+  },
 };
