@@ -16,6 +16,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { SetupWizardPage } from './pages/SetupWizardPage';
 import { SubstitutionsPage } from './pages/SubstitutionsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { DepartmentViewPage } from './pages/DepartmentViewPage';
 import './App.css';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
           <Route path="publish" element={<PublishPage />} />
           
           <Route path="timetable" element={<CohortViewPage />} />
+          <Route path="department-view" element={<DepartmentViewPage />} />
           <Route path="exams" element={<ExamsModulePage />} />
           <Route path="substitutions" element={<SubstitutionsPage />} />
           <Route path="reports" element={<ReportsPage />} />

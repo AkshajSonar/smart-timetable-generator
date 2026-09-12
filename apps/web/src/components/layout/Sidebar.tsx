@@ -33,6 +33,7 @@ const generationItems = [
 
 const specializedItems = [
   { path: '/timetable', label: 'Timetable (Cohort)', icon: CalendarCheck2 },
+  { path: '/department-view', label: 'Department View', icon: Building2 },
   { path: '/exams', label: 'Exams', icon: GraduationCap },
   { path: '/substitutions', label: 'Substitutions', icon: UserCheck },
   { path: '/reports', label: 'Reports & Analytics', icon: BarChart3 },
