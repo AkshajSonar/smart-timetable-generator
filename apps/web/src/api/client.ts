@@ -30,7 +30,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
+    const err = new Error(body?.error?.message ?? `HTTP ${res.status}`);
+    (err as any).details = body?.error?.details;
+    (err as any).code = body?.error?.code;
+    throw err;
   }
   return res.json();
 }
@@ -186,6 +189,11 @@ export const api = {
       request(`/api/v1/tenants/${tenantId}/timetables/${versionId}/publish`, {
         method: 'POST',
         body: JSON.stringify({ version_no: versionNo }),
+      }),
+    edit: (tenantId: string, versionId: string, data: { assignment_id: string; slot_start?: number; staff_profile_id?: string; room_id?: string; version_no: number }) =>
+      request<{ assignment_id: string; new_version_no: number }>(`/api/v1/tenants/${tenantId}/timetables/${versionId}/edit`, {
+        method: 'POST',
+        body: JSON.stringify(data),
       }),
   },
   rules: {
