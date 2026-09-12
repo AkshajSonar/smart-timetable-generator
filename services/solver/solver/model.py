@@ -38,10 +38,10 @@ def build_h1_no_faculty_double_booking(
     faculty_ids: list[str],
     num_slots: int,
 ):
-    """H1: ∀ f,s: Σ_{c,k,r} assign[f,c,k,r,s] ≤ 1."""
+    """H1: ∀ f,s: Σ_{c,k,b,r} assign[f,c,k,b,r,s] ≤ 1."""
     for f in faculty_ids:
         for s in range(num_slots):
-            vars_at_slot = [v for (fv, c, k, r, sv), v in assign.items() if fv == f and sv == s]
+            vars_at_slot = [v for (fv, c, k, b, r, sv), v in assign.items() if fv == f and sv == s]
             if vars_at_slot:
                 model.Add(sum(vars_at_slot) <= 1)
 
@@ -49,15 +49,28 @@ def build_h1_no_faculty_double_booking(
 def build_h2_no_cohort_double_booking(
     model: cp_model.CpModel,
     assign: dict,
-    cohort_ids: list[str],
-    num_slots: int,
+    inp: SolverInput,
 ):
-    """H2: ∀ k,s: Σ_{f,c,r} assign[f,c,k,r,s] ≤ 1."""
-    for k in cohort_ids:
-        for s in range(num_slots):
-            vars_at_slot = [v for (f, c, kv, r, sv), v in assign.items() if kv == k and sv == s]
-            if vars_at_slot:
-                model.Add(sum(vars_at_slot) <= 1)
+    """H2: No cohort/batch double-booked across two courses in the same slot."""
+    batches_by_cohort: dict[str, list[str]] = {}
+    for k in inp.cohorts:
+        batches_by_cohort[k.id] = []
+    for b in inp.batches:
+        batches_by_cohort[b.cohort_id].append(b.id)
+
+    for k in [c.id for c in inp.cohorts]:
+        for s in range(inp.num_slots):
+            whole_vars = [v for (f, c, kv, b, r, sv), v in assign.items() if kv == k and b is None and sv == s]
+            batches = batches_by_cohort.get(k, [])
+            
+            if not batches:
+                if whole_vars:
+                    model.Add(sum(whole_vars) <= 1)
+            else:
+                for batch_id in batches:
+                    batch_vars = [v for (f, c, kv, b, r, sv), v in assign.items() if kv == k and b == batch_id and sv == s]
+                    if whole_vars or batch_vars:
+                        model.Add(sum(whole_vars) + sum(batch_vars) <= 1)
 
 
 def build_h3_no_room_double_booking(
@@ -66,10 +79,10 @@ def build_h3_no_room_double_booking(
     room_ids: list[str],
     num_slots: int,
 ):
-    """H3: ∀ r,s: Σ_{f,c,k} assign[f,c,k,r,s] ≤ 1."""
+    """H3: ∀ r,s: Σ_{f,c,k,b} assign[f,c,k,b,r,s] ≤ 1."""
     for r in room_ids:
         for s in range(num_slots):
-            vars_at_slot = [v for (f, c, k, rv, sv), v in assign.items() if rv == r and sv == s]
+            vars_at_slot = [v for (f, c, k, b, rv, sv), v in assign.items() if rv == r and sv == s]
             if vars_at_slot:
                 model.Add(sum(vars_at_slot) <= 1)
 
@@ -79,18 +92,18 @@ def build_h4_faculty_unavailable_blocks(
     assign: dict,
     inp: SolverInput,
 ):
-    """H4: assign[f,*,*,*,s] = 0 for every s in f's blocked set."""
+    """H4: assign[f,*,*,*,*,s] = 0 for every s in f's blocked set."""
     blocked_set: dict[str, set[int]] = {}
     for b in inp.blocked_slots:
         blocked_set.setdefault(b.faculty_id, set()).add(b.slot_index)
 
-    for (f, c, k, r, s), v in assign.items():
+    for (f, c, k, b, r, s), v in assign.items():
         if s in blocked_set.get(f, set()):
             model.Add(v == 0)
 
 
 def build_h5_faculty_eligibility():
-    """H5: enforced by construction — variables only created for eligible (f,c,k) triples."""
+    """H5: enforced by construction — variables only created for eligible (f,c,k,b) tuples."""
     pass  # No-op: eligibility filtering happens in variable creation
 
 
@@ -99,23 +112,21 @@ def build_h6_hours_match_required(
     assign: dict,
     inp: SolverInput,
 ):
-    """H6: Σ_{r,s} assign[f,c,k,r,s] == required_hours[c,k] for each (f,c,k) eligible.
-
-    For Phase 1 (single cohort), the hours for (c,k) must sum exactly to
-    course.hours_per_week across all eligible faculty for that (c,k).
-    """
+    """H6: Σ_{r,s} assign[f,c,k,b,r,s] == required_hours[c,k] for each (c,k,b) eligible."""
     courses_by_id = {c.id: c for c in inp.courses}
 
-    # Group by (course_id, cohort_id) — sum across all faculty and rooms
-    for cohort in inp.cohorts:
-        for course in inp.courses:
-            required = courses_by_id[course.id].hours_per_week
-            vars_for_ck = [
-                v for (f, c, k, r, s), v in assign.items()
-                if c == course.id and k == cohort.id
-            ]
-            if vars_for_ck:
-                model.Add(sum(vars_for_ck) == required)
+    scheduling_units = set()
+    for (f, c, k, b, r, s) in assign.keys():
+        scheduling_units.add((c, k, b))
+
+    for (course_id, cohort_id, batch_id) in scheduling_units:
+        required = courses_by_id[course_id].hours_per_week
+        vars_for_unit = [
+            v for (f, c, k, b, r, s), v in assign.items()
+            if c == course_id and k == cohort_id and b == batch_id
+        ]
+        if vars_for_unit:
+            model.Add(sum(vars_for_unit) == required)
 
 
 def build_h7_valid_period_range():
@@ -134,13 +145,13 @@ def build_h8_workload_cap(
     for f_data in inp.faculty:
         f = f_data.id
         # Weekly cap
-        all_vars = [v for (fv, c, k, r, s), v in assign.items() if fv == f]
+        all_vars = [v for (fv, c, k, b, r, s), v in assign.items() if fv == f]
         if all_vars:
             model.Add(sum(all_vars) <= f_data.workload_cap_week)
 
         # Daily cap
         for day, day_slots in inp.slots_per_day.items():
-            day_vars = [v for (fv, c, k, r, s), v in assign.items() if fv == f and s in day_slots]
+            day_vars = [v for (fv, c, k, b, r, s), v in assign.items() if fv == f and s in day_slots]
             if day_vars:
                 model.Add(sum(day_vars) <= f_data.workload_cap_day)
 
@@ -150,20 +161,77 @@ def build_h9_room_type_match():
     pass  # No-op: room-type filtering happens in variable creation
 
 
+def build_h10_shared_lab_capacity(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+):
+    """H10: For lab type L, slot s: Σ assign using a room of type L at s ≤ count(rooms of type L)."""
+    room_types = set(r.type for r in inp.rooms)
+    rooms_by_type = {t: [] for t in room_types}
+    for r in inp.rooms:
+        rooms_by_type[r.type].append(r.id)
+
+    for room_type in room_types:
+        capacity = inp.room_type_counts.get(room_type, len(rooms_by_type[room_type]))
+        for s in range(inp.num_slots):
+            vars_for_type = [
+                v for (f, c, k, b, r, sv), v in assign.items()
+                if sv == s and r in rooms_by_type[room_type]
+            ]
+            if vars_for_type:
+                model.Add(sum(vars_for_type) <= capacity)
+
+
+def build_h11_no_student_double_booking(
+    model: cp_model.CpModel,
+    assign: dict,
+    inp: SolverInput,
+):
+    """H11: An individual student's timetable has no double-booking across their course combination.
+    Uses explicit batch membership logic: if a student is in Batch A for a course, they are only
+    constrained against Batch A's assignments for that course, not Batch B's.
+    """
+    for student in inp.students:
+        for s in range(inp.num_slots):
+            # Gather all variables for this student's courses at this slot
+            student_vars_at_slot = []
+            for sc in student.courses:
+                # If they are in a specific batch for this course, match only that batch.
+                # If they are not in a batch (whole cohort course), match where b is None.
+                # Wait, what if the input just says batch_id is None, meaning it's a whole-cohort course?
+                # Then we match b == None. But what if there are no batches for that course at all?
+                # The decision variable has b=None. So matching sc.batch_id works.
+                vars_for_course = [
+                    v for (fv, c, k, b, r, sv), v in assign.items()
+                    if c == sc.course_id and k == sc.cohort_id and b == sc.batch_id and sv == s
+                ]
+                student_vars_at_slot.extend(vars_for_course)
+            
+            if student_vars_at_slot:
+                model.Add(sum(student_vars_at_slot) <= 1)
+
+
 # ---------- Main solve function ----------
 
 
 def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult] | None:
-    """Build the CP-SAT model, apply H1–H9, and solve.
+    """Build the CP-SAT model, apply H1–H11, and solve.
 
     Returns a list of AssignmentResult on success, or None if infeasible.
     """
     model = cp_model.CpModel()
 
-    # Pre-compute eligible (faculty, course, cohort) triples (H5 by construction)
-    eligible_triples = set()
+    batches_by_id = {b.id: b for b in inp.batches}
+
+    # Pre-compute eligible (faculty, course, cohort, batch) tuples (H5 by construction)
+    eligible_tuples = set()
     for e in inp.eligibility:
-        eligible_triples.add((e.faculty_id, e.course_id, e.cohort_id))
+        if e.cohort_id in batches_by_id:
+            batch = batches_by_id[e.cohort_id]
+            eligible_tuples.add((e.faculty_id, e.course_id, batch.cohort_id, batch.id))
+        else:
+            eligible_tuples.add((e.faculty_id, e.course_id, e.cohort_id, None))
 
     # Pre-compute valid (course, room) pairs (H9 by construction)
     courses_by_id = {c.id: c for c in inp.courses}
@@ -180,25 +248,25 @@ def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult]
     # Valid slot indices (H7 by construction)
     valid_slots = set(ps.slot_index for ps in inp.period_slots)
 
-    # Create decision variables: assign[f, c, k, r, s]
-    assign: dict[tuple[str, str, str, str, int], cp_model.IntVar] = {}
+    # Create decision variables: assign[f, c, k, b, r, s]
+    assign: dict[tuple[str, str, str, str | None, str, int], cp_model.IntVar] = {}
 
-    for (f, c, k) in eligible_triples:
+    for (f, c, k, b) in eligible_tuples:
         for r in valid_room_pairs.get(c, []):
             for s in valid_slots:
-                var_name = f"assign_{f}_{c}_{k}_{r}_{s}"
-                assign[(f, c, k, r, s)] = model.NewBoolVar(var_name)
+                b_str = b if b else "none"
+                var_name = f"assign_{f}_{c}_{k}_{b_str}_{r}_{s}"
+                assign[(f, c, k, b, r, s)] = model.NewBoolVar(var_name)
 
     if not assign:
         return None  # No variables means no valid assignments possible
 
     # Apply all hard constraints
     faculty_ids = [f.id for f in inp.faculty]
-    cohort_ids = [k.id for k in inp.cohorts]
     room_ids = [r.id for r in inp.rooms]
 
     build_h1_no_faculty_double_booking(model, assign, faculty_ids, inp.num_slots)
-    build_h2_no_cohort_double_booking(model, assign, cohort_ids, inp.num_slots)
+    build_h2_no_cohort_double_booking(model, assign, inp)
     build_h3_no_room_double_booking(model, assign, room_ids, inp.num_slots)
     build_h4_faculty_unavailable_blocks(model, assign, inp)
     build_h5_faculty_eligibility()  # by construction
@@ -206,6 +274,8 @@ def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult]
     build_h7_valid_period_range()  # by construction
     build_h8_workload_cap(model, assign, inp)
     build_h9_room_type_match()  # by construction
+    build_h10_shared_lab_capacity(model, assign, inp)
+    build_h11_no_student_double_booking(model, assign, inp)
 
     # Solve
     solver = cp_model.CpSolver()
@@ -217,15 +287,16 @@ def solve(inp: SolverInput, timeout_seconds: int = 30) -> list[AssignmentResult]
 
     # Extract solution
     results = []
-    for (f, c, k, r, s), v in assign.items():
+    for (f, c, k, b, r, s), v in assign.items():
         if solver.Value(v) == 1:
             results.append(AssignmentResult(
                 faculty_id=f,
                 course_id=c,
-                cohort_id=k,
+                cohort_id=k,  # the parent cohort
                 room_id=r,
                 slot_index=s,
                 slot_span=courses_by_id[c].block_size,
+                batch_id=b,   # explicitly track batch_id
             ))
 
     return results

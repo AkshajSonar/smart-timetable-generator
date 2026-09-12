@@ -13,6 +13,9 @@ from app.routers import (
     period_templates,
     timetables,
     tenants,
+    reports,
+    import_data,
+    students,
 )
 
 app = FastAPI(
@@ -38,6 +41,9 @@ app.include_router(eligibility.router)
 app.include_router(cohorts.router)
 app.include_router(period_templates.router)
 app.include_router(timetables.router)
+app.include_router(reports.router)
+app.include_router(import_data.router)
+app.include_router(students.router)
 
 
 @app.get("/health")

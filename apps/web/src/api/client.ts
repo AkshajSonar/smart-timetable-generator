@@ -24,6 +24,7 @@ export interface Assignment {
   staff_profile_id: string;
   course_id: string;
   cohort_id: string;
+  batch_id?: string | null;
   room_id: string;
   slot_start: number;
   slot_span: number;
@@ -50,6 +51,26 @@ export interface Cohort {
   type: string;
 }
 
+export interface LoadVerificationItem {
+  id: string;
+  name: string;
+  required_hours: number;
+  scheduled_hours: number;
+  difference: number;
+}
+
+export interface LoadVerificationReport {
+  faculty_load: LoadVerificationItem[];
+  cohort_load: LoadVerificationItem[];
+}
+
+export interface Student {
+  id: string;
+  identity_id: string | null;
+  external_student_code: string;
+  cohort_id: string;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   next_cursor: string | null;
@@ -62,13 +83,23 @@ export const api = {
     list: (tenantId: string) =>
       request<PaginatedResponse<Cohort>>(`/api/v1/tenants/${tenantId}/cohorts?limit=100`),
   },
+  students: {
+    list: (tenantId: string) =>
+      request<PaginatedResponse<Student>>(`/api/v1/tenants/${tenantId}/students?limit=500`),
+    getTimetable: (tenantId: string, studentId: string, versionId: string) =>
+      request<Assignment[]>(`/api/v1/tenants/${tenantId}/students/${studentId}/timetable?versionId=${versionId}`),
+  },
   timetables: {
-    generate: (tenantId: string, cohortId: string) =>
+    generate: (tenantId: string) =>
       request<GenerateResponse>(`/api/v1/tenants/${tenantId}/timetables/generate`, {
         method: 'POST',
-        body: JSON.stringify({ cohort_id: cohortId }),
+        body: JSON.stringify({}),
       }),
     get: (tenantId: string, versionId: string) =>
       request<TimetableVersion>(`/api/v1/tenants/${tenantId}/timetables/${versionId}`),
   },
+  reports: {
+    getVerification: (tenantId: string, versionId: string) =>
+      request<LoadVerificationReport>(`/api/v1/tenants/${tenantId}/reports/verification?version_id=${versionId}`),
+  }
 };

@@ -587,11 +587,11 @@ Don't call a phase done until its tests exist and pass — this is what
 "provably conflict-free" actually cashes out to in code:
 
 - **§22.1 Correctness tests:** for **each** hard constraint H1–H15, an
-  automated test constructs a synthetic case designed to violate that
-  specific constraint if it weren't enforced, asserts the solver's output
-  satisfies it, **and separately** asserts the independent conflict-checker
-  flags a manually-corrupted schedule that violates it. Two assertions per
-  constraint, not one.
+  automated test suite must cover three standard assertions:
+  1. **Satisfaction**: The solver's output satisfies the constraint when a valid schedule is feasible.
+  2. **Infeasibility**: The solver correctly returns INFEASIBLE when the constraint genuinely cannot be met.
+  3. **Violation Reporting**: The independent conflict-checker correctly flags a manually-corrupted schedule that violates the constraint.
+  Three assertions per constraint, not just one or two.
 - **§22.2 Performance tests:** an automated benchmark harness generates
   synthetic tenants at each tier in §16 and asserts solve time and
   incremental-regeneration time against that tier's targets.

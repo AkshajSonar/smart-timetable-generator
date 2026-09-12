@@ -23,5 +23,5 @@ async def set_tenant_context(
     When auth is wired (Phase 5+), this will also validate the JWT's
     identity_id against staff_profile/student_profile at this tenant.
     """
-    await db.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": str(tenantId)})
+    await db.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": str(tenantId)})
     return db

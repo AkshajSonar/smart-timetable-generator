@@ -14,3 +14,4 @@ class Eligibility(Base, TenantMixin):
     staff_profile_id = Column(UUID(as_uuid=True), ForeignKey("staff_profile.id"), nullable=False)
     course_id = Column(UUID(as_uuid=True), ForeignKey("course.id"), nullable=False)
     cohort_id = Column(UUID(as_uuid=True), ForeignKey("cohort.id"), nullable=False)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("batch.id"), nullable=True)

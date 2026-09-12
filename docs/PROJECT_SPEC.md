@@ -654,6 +654,8 @@ Section 3 names the human user types; this defines the actual access-control mod
 
 - student — stored on student_profile, not staff_profile (Section 28); a distinct identity kind with read-only scope over its own data.
 
+*Note: FR-4.2 (batch rotation patterns) and the Section 14 decomposition-into-independent-subproblems optimization are deliberately deferred to a future phase to prioritize core correctness and multi-tenant scaling.*
+
 | **Action category**                                              | **Allowed roles**                                             |
 |------------------------------------------------------------------|---------------------------------------------------------------|
 | Tenant configuration, module toggles (FR-1.5)                    | institution_admin                                             |
@@ -785,5 +787,7 @@ Named explicitly so these are never mistaken for gaps in the spec — they are o
 | 16     | `timetable_version.term_id` (Section 17) referenced no `academic_term` table | Added `academic_term` table: id (PK), tenant_id (FK), name, start_date, end_date. `timetable_version.term_id` and `elective_section.term_id` are real FKs to it. |
 | 17     | FR-5.3 "per-faculty availability windows and reserved non-teaching/admin blocks" had no storage mechanism — `constraint_rule` columns (scope/target_id/threshold/unit) have no slot concept and §30's enum has no "unavailable at slot S" type | Added `staff_availability_block` table: id (PK), staff_profile_id (FK), weekday, period_index, block_type (enum: unavailable, admin, reserved). Solver's H4 reads from this table, not from `constraint_rule`. |
 | 18     | `assignment`, `eligibility`, and `batch` (Section 17) lack `tenant_id`, forcing non-uniform RLS policies with per-row subquery joins — costly for `assignment` (solver's primary write target) | Added denormalized `tenant_id` column to all three tables, set at insert time from `app.tenant_id` session variable. All three get the identical `tenant_id = current_setting('app.tenant_id')::uuid` RLS policy as every other tenant-scoped table. |
+| 19     | `staff_availability_block` (§32 #17) was excluded from RLS in migration 001 because it lacked `tenant_id` — scoped only via `staff_profile_id` FK, which is not directly usable in a `USING` clause without a subquery join. Phase 1 review identified this as a gap; a bare FK is weaker than the DB-layer guarantee invariant #3 requires. | Added denormalized `tenant_id` column to `staff_availability_block` in migration 002, backfilled from `staff_profile.tenant_id`. Applied standard `tenant_isolation` RLS policy identical to all other tenant-scoped tables. |
+| 20     | `batch` lacks a mapping to `student_profile`, making it impossible to know which students are in which batch for individualized student views (FR-8.2) and accurate H11 overlap checking. | Added `batch_membership` table: student_profile_id, batch_id, tenant_id. Allows precise student-level validation without over-constraining the solver. |
 
 With Sections 27–32 in place, every foreign key, enum, and cross-tenant request path referenced anywhere in this document resolves to something concretely defined in it.

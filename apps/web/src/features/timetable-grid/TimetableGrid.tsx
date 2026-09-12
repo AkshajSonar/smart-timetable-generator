@@ -6,7 +6,7 @@
  * (matches the slot_map built in the timetables router).
  */
 
-import type { Assignment, TimetableVersion } from '../api/client';
+import type { Assignment, TimetableVersion } from '../../api/client';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const PERIODS_PER_DAY = 6;
@@ -32,13 +32,16 @@ interface Props {
 }
 
 export function TimetableGrid({ timetable, courseNames = {}, facultyNames = {}, roomNames = {} }: Props) {
-  // Build a lookup: slot_start → assignment
-  const bySlot = new Map<number, Assignment>();
+  // Build a lookup: slot_start → array of assignments
+  const bySlot = new Map<number, Assignment[]>();
   const courseColorIndex = new Map<string, number>();
   let colorIdx = 0;
 
   for (const a of timetable.assignments) {
-    bySlot.set(a.slot_start, a);
+    const list = bySlot.get(a.slot_start) || [];
+    list.push(a);
+    bySlot.set(a.slot_start, list);
+    
     if (!courseColorIndex.has(a.course_id)) {
       courseColorIndex.set(a.course_id, colorIdx++ % COURSE_COLORS.length);
     }
@@ -78,9 +81,9 @@ export function TimetableGrid({ timetable, courseNames = {}, facultyNames = {}, 
               {/* Day cells */}
               {DAYS.map((_, dayIdx) => {
                 const slot = dayIdx * PERIODS_PER_DAY + period;
-                const a = bySlot.get(slot);
+                const assignments = bySlot.get(slot) || [];
 
-                if (!a) {
+                if (assignments.length === 0) {
                   return (
                     <td
                       key={dayIdx}
@@ -89,25 +92,32 @@ export function TimetableGrid({ timetable, courseNames = {}, facultyNames = {}, 
                   );
                 }
 
-                const colorClass = COURSE_COLORS[courseColorIndex.get(a.course_id) ?? 0];
-
                 return (
                   <td
                     key={dayIdx}
-                    className="py-2 px-2 border-b border-r border-white/[0.04] last:border-r-0"
+                    className="py-2 px-2 border-b border-r border-white/[0.04] last:border-r-0 align-top"
                   >
-                    <div
-                      className={`rounded-lg bg-gradient-to-br ${colorClass} border px-2.5 py-1.5 text-xs leading-tight`}
-                    >
-                      <div className="font-semibold truncate">
-                        {label(a.course_id, courseNames, a.course_id.slice(0, 8))}
-                      </div>
-                      <div className="mt-0.5 opacity-75 truncate">
-                        {label(a.staff_profile_id, facultyNames, 'Faculty')}
-                      </div>
-                      <div className="mt-0.5 opacity-60 text-[10px] truncate">
-                        🚪 {label(a.room_id, roomNames, 'Room')}
-                      </div>
+                    <div className="flex flex-col gap-1.5">
+                      {assignments.map(a => {
+                        const colorClass = COURSE_COLORS[courseColorIndex.get(a.course_id) ?? 0];
+                        return (
+                          <div
+                            key={a.id}
+                            className={`rounded-lg bg-gradient-to-br ${colorClass} border px-2.5 py-1.5 text-xs leading-tight`}
+                          >
+                            <div className="font-semibold truncate">
+                              {label(a.course_id, courseNames, a.course_id.slice(0, 8))}
+                            </div>
+                            <div className="mt-0.5 opacity-75 truncate">
+                              {label(a.staff_profile_id, facultyNames, 'Faculty')}
+                            </div>
+                            <div className="mt-0.5 opacity-60 text-[10px] truncate flex justify-between">
+                              <span>🚪 {label(a.room_id, roomNames, 'Room')}</span>
+                              {a.batch_id && <span>Batch</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </td>
                 );
